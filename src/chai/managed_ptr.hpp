@@ -9,46 +9,102 @@
 
 namespace chai {
 
-   struct Host {};
-   struct Default {};
-
 #ifdef __CUDACC__
 
-   struct Device {};
-   struct Managed {};
+   namespace ExecutionStrategy {
+      struct Host {};
+      struct Device {};
+      struct Managed {};
+   }
 
-   template <typename T, typename ExecutionStrategy=Managed>
+   template <typename T, typename ExecStrategy=ExecutionStrategy::Managed>
    class managed_ptr {};
 
    template <typename T,
              typename... Args>
+   CHAI_HOST managed_ptr<T> make_managed(ExecutionStrategy::Managed&&, Args&&... args);
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a managed_ptr<T>.
+   /// Factory function to create managed_ptrs.
+   ///
+   /// @params[in] args The arguments to T's constructor
+   ///
+   template <typename T,
+             typename... Args>
    CHAI_INLINE CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
-      return make_managed<T, Args...>(std::forward<Managed>(Managed{}), std::forward<Args>(args)...);
+      return make_managed<T, Args...>(std::forward<ExecutionStrategy::Managed>(ExecutionStrategy::Managed{}), std::forward<Args>(args)...);
    }
 
    template <typename T,
              typename F,
              typename... Args>
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(ExecutionStrategy::Managed&&, F&& f, Args&&... args);
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a managed_ptr<T>.
+   /// Factory function to create managed_ptrs.
+   ///
+   /// @params[in] f The factory function that will create the object
+   /// @params[in] args The arguments to the factory function
+   ///
+   template <typename T,
+             typename F,
+             typename... Args>
    CHAI_INLINE CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args&&... args) {
-      return make_managed_from_factory<T, F, Args...>(std::forward<Managed>(Managed{}), std::forward<F>(f), std::forward<Args>(args)...);
+      return make_managed_from_factory<T, F, Args...>(std::forward<ExecutionStrategy::Managed>(ExecutionStrategy::Managed{}), std::forward<F>(f), std::forward<Args>(args)...);
    }
 
 #else
 
-   template <typename T, typename ExecutionStrategy=Host>
+   namespace ExecutionStrategy {
+      struct Host {};
+   }
+
+   template <typename T, typename ExecStrategy=ExecutionStrategy::Host>
    class managed_ptr {};
 
    template <typename T,
+             typename... Args>
+   CHAI_HOST managed_ptr<T> make_managed(ExecutionStrategy::Host&&, Args&&... args);
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a managed_ptr<T>.
+   /// Factory function to create managed_ptrs.
+   ///
+   /// @params[in] args The arguments to T's constructor
+   ///
+   template <typename T,
              typename... Args,
    CHAI_INLINE CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
-      return make_managed<T, Args...>(std::forward<Host>(Host{}), std::forward<Args>(args)...);
+      return make_managed<T, Args...>(std::forward<ExecutionStrategy::Host>(ExecutionStrategy::Host{}), std::forward<Args>(args)...);
    }
 
    template <typename T,
              typename F,
+             typename... Args>
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(ExecutionStrategy::Host&&, F&& f, Args&&... args);
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a managed_ptr<T>.
+   /// Factory function to create managed_ptrs.
+   ///
+   /// @params[in] f The factory function that will create the object
+   /// @params[in] args The arguments to the factory function
+   ///
+   template <typename T,
+             typename F,
              typename... Args,
    CHAI_INLINE CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args&&... args) {
-      return make_managed_from_factory<T, F, Args...>(std::forward<Host>(Host{}), std::forward<F>(f), std::forward<Args>(args)...);
+      return make_managed_from_factory<T, F, Args...>(std::forward<ExecutionStrategy::Host>(ExecutionStrategy::Host{}), std::forward<F>(f), std::forward<Args>(args)...);
    }
 
 #endif // __CUDACC__
@@ -89,7 +145,7 @@ namespace chai {
    ///       used and destructors.
    ///
    template <typename T>
-   class managed_ptr<T, Host> {
+   class managed_ptr<T, ExecutionStrategy::Host> {
       public:
          using element_type = T;
 
@@ -151,7 +207,7 @@ namespace chai {
          /// @param[in] other The managed_ptr to copy.
          ///
          template <typename U>
-         CHAI_HOST managed_ptr(const managed_ptr<U, Host>& other) noexcept :
+         CHAI_HOST managed_ptr(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept :
             m_cpu(other.m_cpu),
             m_numReferences(other.m_numReferences)
          {
@@ -203,7 +259,7 @@ namespace chai {
          /// @param[in] other The managed_ptr to copy.
          ///
          template<class U>
-         CHAI_HOST managed_ptr& operator=(const managed_ptr<U, Host>& other) noexcept {
+         CHAI_HOST managed_ptr& operator=(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
             static_assert(std::is_base_of<T, U>::value ||
                           std::is_convertible<U, T>::value,
                           "Type U must a descendent of or be convertible to type T.");
@@ -292,7 +348,7 @@ namespace chai {
          T* m_cpu = nullptr; /// The host pointer
          size_t* m_numReferences = nullptr; /// The reference counter
 
-         template <typename U, typename ExecutionStrategy>
+         template <typename U, typename ExecStrategy>
          friend class managed_ptr; /// Needed for the converting constructor
 
          ///
@@ -335,7 +391,7 @@ namespace chai {
    ///
    template <typename T,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed(Host&&, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(ExecutionStrategy::Host&&, Args&&... args) {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
@@ -355,7 +411,7 @@ namespace chai {
    template <typename T,
              typename F,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed_from_factory(Host&&, F&& f, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(ExecutionStrategy::Host&&, F&& f, Args&&... args) {
       static_assert(std::is_pointer<typename std::result_of<F(Args...)>::type>::value,
                     "Factory function must return a pointer");
 
@@ -499,7 +555,7 @@ namespace chai {
    ///       used and destructors.
    ///
    template <typename T>
-   class managed_ptr<T, Managed> {
+   class managed_ptr<T, ExecutionStrategy::Managed> {
       public:
          using element_type = T;
 
@@ -572,7 +628,7 @@ namespace chai {
          /// @param[in] other The managed_ptr to copy.
          ///
          template <typename U>
-         CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, Managed>& other) noexcept :
+         CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept :
             m_cpu(other.m_cpu),
             m_numReferences(other.m_numReferences),
             m_gpu(other.m_gpu),
@@ -640,7 +696,7 @@ namespace chai {
          /// @param[in] other The managed_ptr to copy.
          ///
          template<class U>
-         CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U, Managed>& other) noexcept {
+         CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
             static_assert(std::is_base_of<T, U>::value ||
                           std::is_convertible<U, T>::value,
                           "Type U must a descendent of or be convertible to type T.");
@@ -770,7 +826,7 @@ namespace chai {
          void (*m_copier)(void*); /// Casts m_copyArguments to the appropriate type and calls the copy constructor
          void (*m_deleter)(void*); /// Casts m_copyArguments to the appropriate type and calls delete
 
-         template <typename U, typename ExecutionStrategy>
+         template <typename U, typename ExecStrategy>
          friend class managed_ptr; /// Needed for the converting constructor
 
          ///
@@ -823,7 +879,7 @@ namespace chai {
    ///
    template <typename T,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed(Managed&&, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(ExecutionStrategy::Managed&&, Args&&... args) {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
@@ -847,7 +903,7 @@ namespace chai {
    template <typename T,
              typename F,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed_from_factory(Managed&&, F&& f, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(ExecutionStrategy::Managed&&, F&& f, Args&&... args) {
       static_assert(std::is_pointer<typename std::result_of<F(Args...)>::type>::value,
                     "Factory function must return a pointer");
 
@@ -901,7 +957,7 @@ namespace chai {
    ///       used and destructors.
    ///
    template <typename T>
-   class managed_ptr<T, Device> {
+   class managed_ptr<T, ExecutionStrategy::Device> {
       public:
          using element_type = T;
 
@@ -965,7 +1021,7 @@ namespace chai {
          /// @param[in] other The managed_ptr to copy.
          ///
          template <typename U>
-         CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, Device>& other) noexcept :
+         CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept :
             m_gpu(other.m_gpu),
             m_numReferences(other.m_numReferences)
          {
@@ -1025,7 +1081,7 @@ namespace chai {
          /// @param[in] other The managed_ptr to copy.
          ///
          template<class U>
-         CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U, Device>& other) noexcept {
+         CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept {
             static_assert(std::is_base_of<T, U>::value ||
                           std::is_convertible<U, T>::value,
                           "Type U must a descendent of or be convertible to type T.");
@@ -1118,7 +1174,7 @@ namespace chai {
          T* m_gpu = nullptr; /// The device pointer
          size_t* m_numReferences = nullptr; /// The reference counter
 
-         template <typename U, typename ExecutionStrategy>
+         template <typename U, typename ExecStrategy>
          friend class managed_ptr; /// Needed for the converting constructor
 
          ///
@@ -1163,7 +1219,7 @@ namespace chai {
    ///
    template <typename T,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed(Device&&, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(ExecutionStrategy::Device&&, Args&&... args) {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
@@ -1183,7 +1239,7 @@ namespace chai {
    template <typename T,
              typename F,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed_from_factory(Device&&, F&& f, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(ExecutionStrategy::Device&&, F&& f, Args&&... args) {
       static_assert(std::is_pointer<typename std::result_of<F(Args...)>::type>::value,
                     "Factory function must return a pointer");
 
