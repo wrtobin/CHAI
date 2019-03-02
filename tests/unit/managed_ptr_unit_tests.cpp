@@ -250,10 +250,15 @@ CUDA_TEST(managed_ptr, cuda_make_managed)
   EXPECT_TRUE(array3[4]);
 }
 
-TEST(managed_ptr, make_managed_from_factory_function)
+CUDA_TEST(managed_ptr, make_managed_from_factory_function)
 {
   const int expectedValue = rand();
-  auto derived = chai::make_managed_from_factory<TestBase>(Factory, expectedValue);
+
+  auto factory = [] CHAI_HOST_DEVICE (const int value) {
+    return Factory(value);
+  };
+
+  auto derived = chai::make_managed_from_factory<TestBase>(factory, expectedValue);
 
   EXPECT_EQ((*derived).getValue(), expectedValue);
 
@@ -308,10 +313,15 @@ CUDA_TEST(managed_ptr, make_managed_from_overloaded_factory_function)
   EXPECT_TRUE(nullptr != derived);
 }
 
-TEST(managed_ptr, make_managed_from_factory_static_member_function)
+CUDA_TEST(managed_ptr, make_managed_from_factory_static_member_function)
 {
   const int expectedValue = rand();
-  auto derived = chai::make_managed_from_factory<TestBase>(&TestBase::Factory, expectedValue);
+
+  auto factory = [] CHAI_HOST_DEVICE (const int value) {
+    return TestBase::Factory(value);
+  };
+
+  auto derived = chai::make_managed_from_factory<TestBase>(factory, expectedValue);
 
   EXPECT_EQ((*derived).getValue(), expectedValue);
 
