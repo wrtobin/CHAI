@@ -417,7 +417,7 @@ namespace chai {
       /// @param[out] devicePtr The device pointer to call delete on
       ///
       template <typename T>
-      __global__ void destroyDevicePtr(T*& devicePtr)
+      __global__ void destroy_on_device(T*& devicePtr)
       {
          if (devicePtr) {
             delete devicePtr;
@@ -806,7 +806,7 @@ namespace chai {
 
                   delete m_cpu;
 
-                  detail::destroyDevicePtr<<<1, 1>>>(m_gpu);
+                  detail::destroy_on_device<<<1, 1>>>(m_gpu);
                   cudaDeviceSynchronize();
                }
             }
@@ -1146,7 +1146,7 @@ namespace chai {
                if (*m_numReferences == 0) {
                   delete m_numReferences;
 
-                  detail::destroyDevicePtr<<<1, 1>>>(m_gpu);
+                  detail::destroy_on_device<<<1, 1>>>(m_gpu);
                   cudaDeviceSynchronize();
                }
             }
