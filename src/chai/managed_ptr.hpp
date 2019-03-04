@@ -81,7 +81,7 @@ namespace chai {
    /// @params[in] args The arguments to T's constructor
    ///
    template <typename T,
-             typename... Args,
+             typename... Args>
    CHAI_INLINE CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
       return make_managed<T, Args...>(std::forward<ExecutionStrategy::Host>(ExecutionStrategy::Host{}), std::forward<Args>(args)...);
    }
@@ -102,7 +102,7 @@ namespace chai {
    ///
    template <typename T,
              typename F,
-             typename... Args,
+             typename... Args>
    CHAI_INLINE CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args&&... args) {
       return make_managed_from_factory<T, F, Args...>(std::forward<ExecutionStrategy::Host>(ExecutionStrategy::Host{}), std::forward<F>(f), std::forward<Args>(args)...);
    }
