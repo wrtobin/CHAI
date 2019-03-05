@@ -200,6 +200,24 @@ namespace chai {
          ///
          /// @author Alan Dayton
          ///
+         /// Aliasing constructor.
+         /// Has the same ownership information as other, but holds a different pointer.
+         ///
+         /// @param[in] other The managed_ptr to copy ownership information from.
+         /// @param[in] ptr   The pointer to maintain a reference to.
+         ///
+         template <typename U>
+         CHAI_HOST managed_ptr(const managed_ptr<U, ExecutionStrategy::Host>& other,
+                               T* ptr) noexcept :
+            m_cpu(ptr),
+            m_numReferences(other.m_numReferences)
+         {
+            incrementReferenceCount();
+         }
+
+         ///
+         /// @author Alan Dayton
+         ///
          /// Copy constructor.
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
@@ -423,6 +441,70 @@ namespace chai {
 
       R* cpuPtr = f(std::forward<Args>(args)...);
       return managed_ptr<T>(cpuPtr);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using static_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using static_cast.
+   ///
+   template <typename T, typename U>
+   managed_ptr<T, ExecutionStrategy::Host> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      auto p = static_cast<T*>(other.get());
+      return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using dynamic_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using dynamic_cast.
+   ///
+   template <typename T, typename U>
+   managed_ptr<T, ExecutionStrategy::Host> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      if (auto p = dynamic_cast<T*>(other.get())) {
+         return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+      }
+      else {
+         return managed_ptr<T, ExecutionStrategy::Host>();
+      }
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using const_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using const_cast.
+   ///
+   template <typename T, typename U>
+   managed_ptr<T, ExecutionStrategy::Host> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      auto p = const_cast<T*>(other.get());
+      return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using reinterpret_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using reinterpret_cast.
+   ///
+   template <typename T, typename U>
+   managed_ptr<T, ExecutionStrategy::Host> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      auto p = reinterpret_cast<T*>(other.get());
+      return managed_ptr<T, ExecutionStrategy::Host>(other, p);
    }
 
 #ifdef __CUDACC__
