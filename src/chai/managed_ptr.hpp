@@ -170,11 +170,11 @@ namespace chai {
          ///
          /// Constructs a managed_ptr from the given host pointer.
          ///
-         /// @param[in] cpuPtr The host pointer to take ownership of
+         /// @param[in] hostPtr The host pointer to take ownership of
          ///
          template <typename U>
-         CHAI_HOST managed_ptr(U* cpuPtr) :
-            m_cpu(cpuPtr),
+         CHAI_HOST managed_ptr(U* hostPtr) :
+            m_cpu(hostPtr),
             m_numReferences(new std::size_t{1})
          {
             static_assert(std::is_base_of<T, U>::value ||
@@ -200,25 +200,7 @@ namespace chai {
          ///
          /// @author Alan Dayton
          ///
-         /// Aliasing constructor.
-         /// Has the same ownership information as other, but holds a different pointer.
-         ///
-         /// @param[in] other The managed_ptr to copy ownership information from.
-         /// @param[in] ptr   The pointer to maintain a reference to.
-         ///
-         template <typename U>
-         CHAI_HOST managed_ptr(const managed_ptr<U, ExecutionStrategy::Host>& other,
-                               T* ptr) noexcept :
-            m_cpu(ptr),
-            m_numReferences(other.m_numReferences)
-         {
-            incrementReferenceCount();
-         }
-
-         ///
-         /// @author Alan Dayton
-         ///
-         /// Copy constructor.
+         /// Converting constructor.
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
@@ -233,6 +215,24 @@ namespace chai {
                           std::is_convertible<U, T>::value,
                           "Type U must a descendent of or be convertible to type T.");
 
+            incrementReferenceCount();
+         }
+
+         ///
+         /// @author Alan Dayton
+         ///
+         /// Aliasing constructor.
+         /// Has the same ownership information as other, but holds a different pointer.
+         ///
+         /// @param[in] other The managed_ptr to copy ownership information from.
+         /// @param[in] ptr   The pointer to maintain a reference to.
+         ///
+         template <typename U>
+         CHAI_HOST managed_ptr(const managed_ptr<U, ExecutionStrategy::Host>& other,
+                               T* ptr) noexcept :
+            m_cpu(ptr),
+            m_numReferences(other.m_numReferences)
+         {
             incrementReferenceCount();
          }
 
@@ -413,8 +413,8 @@ namespace chai {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
-      T* cpuPtr = new T(std::forward<Args>(args)...);
-      return managed_ptr<T>(cpuPtr);
+      T* hostPtr = new T(std::forward<Args>(args)...);
+      return managed_ptr<T>(hostPtr);
    }
 
    ///
@@ -439,8 +439,8 @@ namespace chai {
                     std::is_convertible<R, T>::value,
                     "Factory function must have a return type that is a descendent of or is convertible to type T.");
 
-      R* cpuPtr = f(std::forward<Args>(args)...);
-      return managed_ptr<T>(cpuPtr);
+      R* hostPtr = f(std::forward<Args>(args)...);
+      return managed_ptr<T>(hostPtr);
    }
 
    ///
@@ -453,9 +453,9 @@ namespace chai {
    ///                      convert using static_cast.
    ///
    template <typename T, typename U>
-   managed_ptr<T, ExecutionStrategy::Host> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
-      auto p = static_cast<T*>(other.get());
-      return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      auto hostPtr = static_cast<T*>(other.get());
+      return managed_ptr<T, ExecutionStrategy::Host>(other, hostPtr);
    }
 
    ///
@@ -468,9 +468,9 @@ namespace chai {
    ///                      convert using dynamic_cast.
    ///
    template <typename T, typename U>
-   managed_ptr<T, ExecutionStrategy::Host> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
-      if (auto p = dynamic_cast<T*>(other.get())) {
-         return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      if (auto hostPtr = dynamic_cast<T*>(other.get())) {
+         return managed_ptr<T, ExecutionStrategy::Host>(other, hostPtr);
       }
       else {
          return managed_ptr<T, ExecutionStrategy::Host>();
@@ -487,9 +487,9 @@ namespace chai {
    ///                      convert using const_cast.
    ///
    template <typename T, typename U>
-   managed_ptr<T, ExecutionStrategy::Host> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
-      auto p = const_cast<T*>(other.get());
-      return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      auto hostPtr = const_cast<T*>(other.get());
+      return managed_ptr<T, ExecutionStrategy::Host>(other, hostPtr);
    }
 
    ///
@@ -502,9 +502,9 @@ namespace chai {
    ///                      convert using reinterpret_cast.
    ///
    template <typename T, typename U>
-   managed_ptr<T, ExecutionStrategy::Host> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
-      auto p = reinterpret_cast<T*>(other.get());
-      return managed_ptr<T, ExecutionStrategy::Host>(other, p);
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
+      auto hostPtr = reinterpret_cast<T*>(other.get());
+      return managed_ptr<T, ExecutionStrategy::Host>(other, hostPtr);
    }
 
 #ifdef __CUDACC__
@@ -565,6 +565,22 @@ namespace chai {
       ///
       /// @author Alan Dayton
       ///
+      /// Converts the underlying pointer on the device using static_cast.
+      ///
+      /// @params[out] devicePtr The device pointer that will contain the result of
+      ///                           calling static cast on the pointer contained by
+      ///                           the given managed_ptr
+      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using static_cast
+      ///
+      template <typename T, typename U>
+      __global__ void static_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
+         devicePtr = static_cast<T*>(other.get());
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
       /// Creates a new T on the device.
       ///
       /// @param[in]  args The arguments to T's constructor
@@ -596,6 +612,22 @@ namespace chai {
       CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
          T* devicePtr;
          make_on_device_from_factory<T><<<1, 1>>>(devicePtr, f, args...);
+         cudaDeviceSynchronize();
+         return devicePtr;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using static_cast.
+      ///
+      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using static_cast
+      ///
+      template <typename T, typename U>
+      CHAI_HOST T* static_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+         T* devicePtr;
+         static_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
          cudaDeviceSynchronize();
          return devicePtr;
       }
@@ -662,13 +694,13 @@ namespace chai {
          ///
          /// Constructs a managed_ptr from the given host and device pointers.
          ///
-         /// @param[in] cpuPtr The host pointer to take ownership of
-         /// @param[in] gpuPtr The device pointer to take ownership of
+         /// @param[in] hostPtr The host pointer to take ownership of
+         /// @param[in] devicePtr The device pointer to take ownership of
          ///
          template <typename U, typename V>
-         CHAI_HOST managed_ptr(U* cpuPtr, V* gpuPtr) :
-            m_gpu(gpuPtr),
-            m_cpu(cpuPtr),
+         CHAI_HOST managed_ptr(U* hostPtr, V* devicePtr) :
+            m_gpu(devicePtr),
+            m_cpu(hostPtr),
             m_numReferences(new std::size_t{1})
          {
             static_assert(std::is_base_of<T, U>::value ||
@@ -703,7 +735,7 @@ namespace chai {
          ///
          /// @author Alan Dayton
          ///
-         /// Copy constructor.
+         /// Converting constructor.
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
@@ -722,6 +754,29 @@ namespace chai {
                           std::is_convertible<U, T>::value,
                           "Type U must a descendent of or be convertible to type T.");
 
+#ifndef __CUDA_ARCH__
+            incrementReferenceCount();
+#endif
+         }
+
+         ///
+         /// @author Alan Dayton
+         ///
+         /// Aliasing constructor.
+         /// Has the same ownership information as other, but holds a different pointer.
+         ///
+         /// @param[in] other The managed_ptr to copy ownership information from.
+         /// @param[in] ptr   The pointer to maintain a reference to.
+         ///
+         template <typename U>
+         CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Managed>& other, T* hostPtr, T* devicePtr) noexcept :
+            m_cpu(hostPtr),
+            m_numReferences(other.m_numReferences),
+            m_gpu(devicePtr),
+            m_copyArguments(other.m_copyArguments),
+            m_copier(other.m_copier),
+            m_deleter(other.m_deleter)
+         {
 #ifndef __CUDA_ARCH__
             incrementReferenceCount();
 #endif
@@ -965,10 +1020,10 @@ namespace chai {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
-      T* cpuPtr = new T(args...);
-      T* gpuPtr = detail::make_on_device<T>(args...);
+      T* hostPtr = new T(args...);
+      T* devicePtr = detail::make_on_device<T>(args...);
 
-      managed_ptr<T> result(cpuPtr, gpuPtr);
+      managed_ptr<T> result(hostPtr, devicePtr);
       result.registerArguments(std::forward<Args>(args)...);
       return result;
    }
@@ -995,12 +1050,28 @@ namespace chai {
                     std::is_convertible<R, T>::value,
                     "Factory function must have a return type that is a descendent of or is convertible to type T.");
 
-      R* cpuPtr = f(args...);
-      R* gpuPtr = detail::make_on_device_from_factory<R>(f, args...);
+      R* hostPtr = f(args...);
+      R* devicePtr = detail::make_on_device_from_factory<R>(f, args...);
 
-      managed_ptr<T> result(cpuPtr, gpuPtr);
+      managed_ptr<T> result(hostPtr, devicePtr);
       result.registerArguments(std::forward<Args>(args)...);
       return result;
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using static_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using static_cast
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      auto hostPtr = static_cast<T*>(other.get());
+      auto devicePtr = static_pointer_cast_on_device(other);
+      return managed_ptr<T, ExecutionStrategy::Managed>(other, hostPtr, devicePtr);
    }
    
    ///
@@ -1064,11 +1135,11 @@ namespace chai {
          ///
          /// Constructs a managed_ptr from the given device pointer.
          ///
-         /// @param[in] gpuPtr The device pointer to take ownership of
+         /// @param[in] devicePtr The device pointer to take ownership of
          ///
          template <typename U>
-         CHAI_HOST managed_ptr(U* gpuPtr) :
-            m_gpu(gpuPtr),
+         CHAI_HOST managed_ptr(U* devicePtr) :
+            m_gpu(devicePtr),
             m_numReferences(new std::size_t{1})
          {
             static_assert(std::is_base_of<T, U>::value ||
@@ -1305,8 +1376,8 @@ namespace chai {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
-      T* gpuPtr = detail::make_on_device<T>(std::forward<Args>(args)...);
-      return managed_ptr<T>(gpuPtr);
+      T* devicePtr = detail::make_on_device<T>(std::forward<Args>(args)...);
+      return managed_ptr<T>(devicePtr);
    }
 
    ///
@@ -1331,8 +1402,8 @@ namespace chai {
                     std::is_convertible<R, T>::value,
                     "Factory function must have a return type that is a descendent of or is convertible to type T.");
 
-      R* gpuPtr = detail::make_on_device_from_factory<R>(f, std::forward<Args>(args)...);
-      return managed_ptr<T>(gpuPtr);
+      R* devicePtr = detail::make_on_device_from_factory<R>(f, std::forward<Args>(args)...);
+      return managed_ptr<T>(devicePtr);
    }
 
 #endif // __CUDACC__
