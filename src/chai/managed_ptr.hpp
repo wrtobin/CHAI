@@ -30,7 +30,7 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] args The arguments to T's constructor
+   /// @param[in] args The arguments to T's constructor
    ///
    template <typename T,
              typename... Args>
@@ -49,8 +49,8 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] f The factory function that will create the object
-   /// @params[in] args The arguments to the factory function
+   /// @param[in] f The factory function that will create the object
+   /// @param[in] args The arguments to the factory function
    ///
    template <typename T,
              typename F,
@@ -78,7 +78,7 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] args The arguments to T's constructor
+   /// @param[in] args The arguments to T's constructor
    ///
    template <typename T,
              typename... Args>
@@ -97,8 +97,8 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] f The factory function that will create the object
-   /// @params[in] args The arguments to the factory function
+   /// @param[in] f The factory function that will create the object
+   /// @param[in] args The arguments to the factory function
    ///
    template <typename T,
              typename F,
@@ -188,7 +188,7 @@ namespace chai {
          /// Copy constructor.
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST managed_ptr(const managed_ptr& other) noexcept :
             m_cpu(other.m_cpu),
@@ -204,7 +204,7 @@ namespace chai {
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          template <typename U>
          CHAI_HOST managed_ptr(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept :
@@ -224,13 +224,13 @@ namespace chai {
          /// Aliasing constructor.
          /// Has the same ownership information as other, but holds a different pointer.
          ///
-         /// @param[in] other The managed_ptr to copy ownership information from.
-         /// @param[in] ptr   The pointer to maintain a reference to.
+         /// @param[in] other The managed_ptr to copy ownership information from
+         /// @param[in] hostPtr The pointer to maintain a reference to
          ///
          template <typename U>
          CHAI_HOST managed_ptr(const managed_ptr<U, ExecutionStrategy::Host>& other,
-                               T* ptr) noexcept :
-            m_cpu(ptr),
+                               T* hostPtr) noexcept :
+            m_cpu(hostPtr),
             m_numReferences(other.m_numReferences)
          {
             incrementReferenceCount();
@@ -252,7 +252,7 @@ namespace chai {
          /// Copy assignment operator.
          /// Copies the given managed_ptr and increases the reference count.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST managed_ptr& operator=(const managed_ptr& other) noexcept {
             if (this != &other) {
@@ -274,7 +274,7 @@ namespace chai {
          /// Copies the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          template<class U>
          CHAI_HOST managed_ptr& operator=(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
@@ -357,7 +357,7 @@ namespace chai {
          ///
          /// Saves the arguments in order to later call their copy constructor.
          ///
-         /// @param[in] args The arguments to save..
+         /// @param[in] args The arguments to save
          ///
          template <typename... Args>
          CHAI_HOST void registerArguments(Args&&...) {}
@@ -405,7 +405,7 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] args The arguments to T's constructor
+   /// @param[in] args The arguments to T's constructor
    ///
    template <typename T,
              typename... Args>
@@ -423,8 +423,8 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] f The factory function that will create the object
-   /// @params[in] args The arguments to the factory function
+   /// @param[in] f The factory function that will create the object
+   /// @param[in] args The arguments to the factory function
    ///
    template <typename T,
              typename F,
@@ -449,8 +449,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using static_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using static_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using static_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
@@ -464,8 +464,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using dynamic_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using dynamic_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using dynamic_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
@@ -483,8 +483,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using const_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using const_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using const_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
@@ -498,8 +498,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using reinterpret_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using reinterpret_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using reinterpret_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Host> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Host>& other) noexcept {
@@ -522,7 +522,8 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      __global__ void make_on_device(T*& devicePtr, Args... args) {
+      __global__ void make_on_device(T*& devicePtr, Args... args)
+      {
          devicePtr = new T(std::forward<Args>(args)...);
       }
 
@@ -541,7 +542,8 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      __global__ void make_on_device_from_factory(T*& devicePtr, F f, Args... args) {
+      __global__ void make_on_device_from_factory(T*& devicePtr, F f, Args... args)
+      {
          devicePtr = f(std::forward<Args>(args)...);
       }
 
@@ -553,7 +555,8 @@ namespace chai {
       /// @param[out] devicePtr The device pointer to call delete on
       ///
       template <typename T>
-      __global__ void destroy_on_device(T*& devicePtr) {
+      __global__ void destroy_on_device(T*& devicePtr)
+      {
          if (devicePtr) {
             delete devicePtr;
          }
@@ -567,8 +570,10 @@ namespace chai {
       /// @param[out] devicePtr Used to return the device pointer
       /// @param[in]  other The managed_ptr from which to extract the device pointer
       ///
-      template <typename T>
-      __global__ void get_on_device(T*& devicePtr, const managed_ptr<T, ExecutionStrategy::Managed>& other) {
+      template <typename T, typename ExecStrategy>
+      __global__ void get_on_device(T*& devicePtr,
+                                    const managed_ptr<T, ExecStrategy>& other)
+      {
          devicePtr = other.get();
       }
 
@@ -577,14 +582,15 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using static_cast.
       ///
-      /// @params[out] devicePtr The device pointer that will contain the result of
+      /// @param[out] devicePtr The device pointer that will contain the result of
       ///                           calling static_cast on the pointer contained by
       ///                           the given managed_ptr
-      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using static_cast
       ///
-      template <typename T, typename U>
-      __global__ void static_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
+      template <typename T, typename U, typename ExecStrategy>
+      __global__ void static_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecStrategy>& other)
+      {
          devicePtr = static_cast<T*>(other.get());
       }
 
@@ -593,14 +599,14 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using const_cast.
       ///
-      /// @params[out] devicePtr The device pointer that will contain the result of
+      /// @param[out] devicePtr The device pointer that will contain the result of
       ///                           calling const_cast on the pointer contained by
       ///                           the given managed_ptr
-      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using const_cast
       ///
-      template <typename T, typename U>
-      __global__ void const_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
+      template <typename T, typename U, typename ExecStrategy>
+      __global__ void const_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecStrategy>& other) {
          devicePtr = const_cast<T*>(other.get());
       }
 
@@ -609,14 +615,14 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using reinterpret_cast.
       ///
-      /// @params[out] devicePtr The device pointer that will contain the result of
+      /// @param[out] devicePtr The device pointer that will contain the result of
       ///                           calling reinterpret_cast on the pointer contained by
       ///                           the given managed_ptr
-      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using reinterpret_cast
       ///
-      template <typename T, typename U>
-      __global__ void reinterpret_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
+      template <typename T, typename U, typename ExecStrategy>
+      __global__ void reinterpret_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecStrategy>& other) {
          devicePtr = reinterpret_cast<T*>(other.get());
       }
 
@@ -665,8 +671,8 @@ namespace chai {
       ///
       /// @param[in] other The managed_ptr from which to extract the device pointer
       ///
-      template <typename T>
-      T* get_on_device(const managed_ptr<T, ExecutionStrategy::Managed>& other) {
+      template <typename T, typename ExecStrategy>
+      T* get_on_device(const managed_ptr<T, ExecStrategy>& other) {
          T* devicePtr;
          get_on_device<<<1, 1>>>(devicePtr, other);
          cudaDeviceSynchronize();
@@ -678,11 +684,11 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using static_cast.
       ///
-      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using static_cast
       ///
-      template <typename T, typename U>
-      CHAI_HOST T* static_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      template <typename T, typename U, typename ExecStrategy>
+      CHAI_HOST T* static_pointer_cast_on_device(const managed_ptr<U, ExecStrategy>& other) noexcept {
          T* devicePtr;
          static_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
          cudaDeviceSynchronize();
@@ -693,11 +699,11 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using const_cast.
       ///
-      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using const_cast
       ///
-      template <typename T, typename U>
-      CHAI_HOST T* const_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      template <typename T, typename U, typename ExecStrategy>
+      CHAI_HOST T* const_pointer_cast_on_device(const managed_ptr<U, ExecStrategy>& other) noexcept {
          T* devicePtr;
          const_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
          cudaDeviceSynchronize();
@@ -709,11 +715,11 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using reinterpret_cast.
       ///
-      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using reinterpret_cast
       ///
-      template <typename T, typename U>
-      CHAI_HOST T* reinterpret_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      template <typename T, typename U, typename ExecStrategy>
+      CHAI_HOST T* reinterpret_pointer_cast_on_device(const managed_ptr<U, ExecStrategy>& other) noexcept {
          T* devicePtr;
          reinterpret_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
          cudaDeviceSynchronize();
@@ -805,7 +811,7 @@ namespace chai {
          /// Copy constructor.
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr& other) noexcept :
             m_cpu(other.m_cpu),
@@ -827,7 +833,7 @@ namespace chai {
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          template <typename U>
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept :
@@ -853,8 +859,9 @@ namespace chai {
          /// Aliasing constructor.
          /// Has the same ownership information as other, but holds a different pointer.
          ///
-         /// @param[in] other The managed_ptr to copy ownership information from.
-         /// @param[in] ptr   The pointer to maintain a reference to.
+         /// @param[in] other The managed_ptr to copy ownership information from
+         /// @param[in] hostPtr The host pointer to maintain a reference to
+         /// @param[in] devicePtr The device pointer to maintain a reference to
          ///
          template <typename U>
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Managed>& other, T* hostPtr, T* devicePtr) noexcept :
@@ -888,7 +895,7 @@ namespace chai {
          /// Copy assignment operator.
          /// Copies the given managed_ptr and increases the reference count.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr& other) noexcept {
             if (this != &other) {
@@ -918,7 +925,7 @@ namespace chai {
          /// Copies the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          template<class U>
          CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
@@ -1028,7 +1035,7 @@ namespace chai {
          ///
          /// Saves the arguments in order to later call their copy constructor.
          ///
-         /// @param[in] args The arguments to save..
+         /// @param[in] args The arguments to save
          ///
          template <typename... Args>
          CHAI_HOST void registerArguments(Args&&... args) {
@@ -1100,7 +1107,7 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] args The arguments to T's constructor
+   /// @param[in] args The arguments to T's constructor
    ///
    template <typename T,
              typename... Args>
@@ -1122,8 +1129,8 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] f The factory function that will create the object
-   /// @params[in] args The arguments to the factory function
+   /// @param[in] f The factory function that will create the object
+   /// @param[in] args The arguments to the factory function
    ///
    template <typename T,
              typename F,
@@ -1152,7 +1159,7 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using static_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
    ///                      convert using static_cast
    ///
    template <typename T, typename U>
@@ -1168,8 +1175,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using dynamic_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using dynamic_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using dynamic_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
@@ -1182,8 +1189,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using const_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using const_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using const_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
@@ -1198,8 +1205,8 @@ namespace chai {
    /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
    ///    the underlying pointer is converted using reinterpret_cast.
    ///
-   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
-   ///                      convert using reinterpret_cast.
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using reinterpret_cast
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
@@ -1287,7 +1294,7 @@ namespace chai {
          /// Copy constructor.
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr& other) noexcept :
             m_gpu(other.m_gpu),
@@ -1305,7 +1312,7 @@ namespace chai {
          /// Constructs a copy of the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          template <typename U>
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept :
@@ -1318,6 +1325,25 @@ namespace chai {
 
 #ifndef __CUDA_ARCH__
                incrementReferenceCount();
+#endif
+         }
+
+         ///
+         /// @author Alan Dayton
+         ///
+         /// Aliasing constructor.
+         /// Has the same ownership information as other, but holds a different pointer.
+         ///
+         /// @param[in] other The managed_ptr to copy ownership information from
+         /// @param[in] devicePtr The pointer to maintain a reference to
+         ///
+         template <typename U>
+         CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U, ExecutionStrategy::Device>& other, T* devicePtr) noexcept :
+            m_gpu(devicePtr),
+            m_numReferences(other.m_numReferences)
+         {
+#ifndef __CUDA_ARCH__
+            incrementReferenceCount();
 #endif
          }
 
@@ -1339,7 +1365,7 @@ namespace chai {
          /// Copy assignment operator.
          /// Copies the given managed_ptr and increases the reference count.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr& other) noexcept {
             if (this != &other) {
@@ -1365,7 +1391,7 @@ namespace chai {
          /// Copies the given managed_ptr and increases the reference count.
          ///    U must be convertible to T.
          ///
-         /// @param[in] other The managed_ptr to copy.
+         /// @param[in] other The managed_ptr to copy
          ///
          template<class U>
          CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept {
@@ -1452,7 +1478,7 @@ namespace chai {
          ///
          /// Saves the arguments in order to later call their copy constructor.
          ///
-         /// @param[in] args The arguments to save..
+         /// @param[in] args The arguments to save
          ///
          template <typename... Args>
          CHAI_HOST void registerArguments(Args&&...) {}
@@ -1502,7 +1528,7 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] args The arguments to T's constructor
+   /// @param[in] args The arguments to T's constructor
    ///
    template <typename T,
              typename... Args>
@@ -1520,8 +1546,8 @@ namespace chai {
    /// Makes a managed_ptr<T>.
    /// Factory function to create managed_ptrs.
    ///
-   /// @params[in] f The factory function that will create the object
-   /// @params[in] args The arguments to the factory function
+   /// @param[in] f The factory function that will create the object
+   /// @param[in] args The arguments to the factory function
    ///
    template <typename T,
              typename F,
@@ -1538,6 +1564,65 @@ namespace chai {
 
       R* devicePtr = detail::make_on_device_from_factory<R>(f, std::forward<Args>(args)...);
       return managed_ptr<T>(devicePtr);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using static_cast.
+   ///
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using static_cast
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Device> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept {
+      auto devicePtr = detail::static_pointer_cast_on_device<T>(other);
+      return managed_ptr<T, ExecutionStrategy::Device>(other, devicePtr);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using dynamic_cast.
+   ///
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using dynamic_cast
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Device> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept {
+      static_assert(true, "CUDA does not support dynamic_cast");
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using const_cast.
+   ///
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using const_cast
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Device> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept {
+      auto devicePtr = detail::const_pointer_cast_on_device<T>(other);
+      return managed_ptr<T, ExecutionStrategy::Device>(other, devicePtr);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using reinterpret_cast.
+   ///
+   /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using reinterpret_cast
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Device> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Device>& other) noexcept {
+      auto devicePtr = detail::reinterpret_pointer_cast_on_device<T>(other);
+      return managed_ptr<T, ExecutionStrategy::Device>(other, devicePtr);
    }
 
 #endif // __CUDACC__
