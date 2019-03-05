@@ -175,14 +175,20 @@ CUDA_TEST(managed_ptr, cuda_class_with_managed_array)
   array[0] = expectedValue;
 
   chai::managed_ptr<TestBase> derived = chai::make_managed<TestDerived>(array);
-  chai::ManagedArray<int> results(1, chai::GPU);
+  auto derived2 = chai::static_pointer_cast<TestDerived>(derived);
+  auto derived3 = chai::reinterpret_pointer_cast<TestDerived>(derived);
+  chai::ManagedArray<int> results(3, chai::GPU);
   
   forall(cuda(), 0, 1, [=] __device__ (int i) {
     results[i] = derived->getValue(i);
+    results[1] = derived2->getValue(i);
+    results[2] = derived3->getValue(i);
   });
 
   results.move(chai::CPU);
   ASSERT_EQ(results[0], expectedValue);
+  ASSERT_EQ(results[1], expectedValue);
+  ASSERT_EQ(results[2], expectedValue);
 }
 
 TEST(managed_ptr, class_with_raw_ptr)

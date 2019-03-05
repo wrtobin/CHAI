@@ -522,8 +522,7 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      __global__ void make_on_device(T*& devicePtr, Args... args)
-      {
+      __global__ void make_on_device(T*& devicePtr, Args... args) {
          devicePtr = new T(std::forward<Args>(args)...);
       }
 
@@ -542,8 +541,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      __global__ void make_on_device_from_factory(T*& devicePtr, F f, Args... args)
-      {
+      __global__ void make_on_device_from_factory(T*& devicePtr, F f, Args... args) {
          devicePtr = f(std::forward<Args>(args)...);
       }
 
@@ -555,8 +553,7 @@ namespace chai {
       /// @param[out] devicePtr The device pointer to call delete on
       ///
       template <typename T>
-      __global__ void destroy_on_device(T*& devicePtr)
-      {
+      __global__ void destroy_on_device(T*& devicePtr) {
          if (devicePtr) {
             delete devicePtr;
          }
@@ -565,10 +562,23 @@ namespace chai {
       ///
       /// @author Alan Dayton
       ///
+      /// Gets the device pointer from the managed_ptr.
+      ///
+      /// @param[out] devicePtr Used to return the device pointer
+      /// @param[in]  other The managed_ptr from which to extract the device pointer
+      ///
+      template <typename T>
+      __global__ void get_on_device(T*& devicePtr, const managed_ptr<T, ExecutionStrategy::Managed>& other) {
+         devicePtr = other.get();
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
       /// Converts the underlying pointer on the device using static_cast.
       ///
       /// @params[out] devicePtr The device pointer that will contain the result of
-      ///                           calling static cast on the pointer contained by
+      ///                           calling static_cast on the pointer contained by
       ///                           the given managed_ptr
       /// @params[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using static_cast
@@ -576,6 +586,38 @@ namespace chai {
       template <typename T, typename U>
       __global__ void static_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
          devicePtr = static_cast<T*>(other.get());
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using const_cast.
+      ///
+      /// @params[out] devicePtr The device pointer that will contain the result of
+      ///                           calling const_cast on the pointer contained by
+      ///                           the given managed_ptr
+      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using const_cast
+      ///
+      template <typename T, typename U>
+      __global__ void const_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
+         devicePtr = const_cast<T*>(other.get());
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using reinterpret_cast.
+      ///
+      /// @params[out] devicePtr The device pointer that will contain the result of
+      ///                           calling reinterpret_cast on the pointer contained by
+      ///                           the given managed_ptr
+      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using reinterpret_cast
+      ///
+      template <typename T, typename U>
+      __global__ void reinterpret_pointer_cast_on_device(T*& devicePtr, const managed_ptr<U, ExecutionStrategy::Managed>& other) {
+         devicePtr = reinterpret_cast<T*>(other.get());
       }
 
       ///
@@ -619,6 +661,21 @@ namespace chai {
       ///
       /// @author Alan Dayton
       ///
+      /// Gets the device pointer from the managed_ptr.
+      ///
+      /// @param[in] other The managed_ptr from which to extract the device pointer
+      ///
+      template <typename T>
+      T* get_on_device(const managed_ptr<T, ExecutionStrategy::Managed>& other) {
+         T* devicePtr;
+         get_on_device<<<1, 1>>>(devicePtr, other);
+         cudaDeviceSynchronize();
+         return devicePtr;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
       /// Converts the underlying pointer on the device using static_cast.
       ///
       /// @params[in] other The managed_ptr to share ownership with and whose pointer to
@@ -628,6 +685,37 @@ namespace chai {
       CHAI_HOST T* static_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
          T* devicePtr;
          static_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
+         cudaDeviceSynchronize();
+         return devicePtr;
+      }
+
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using const_cast.
+      ///
+      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using const_cast
+      ///
+      template <typename T, typename U>
+      CHAI_HOST T* const_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+         T* devicePtr;
+         const_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
+         cudaDeviceSynchronize();
+         return devicePtr;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using reinterpret_cast.
+      ///
+      /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using reinterpret_cast
+      ///
+      template <typename T, typename U>
+      CHAI_HOST T* reinterpret_pointer_cast_on_device(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+         T* devicePtr;
+         reinterpret_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
          cudaDeviceSynchronize();
          return devicePtr;
       }
@@ -1070,7 +1158,53 @@ namespace chai {
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> static_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
       auto hostPtr = static_cast<T*>(other.get());
-      auto devicePtr = static_pointer_cast_on_device(other);
+      auto devicePtr = detail::static_pointer_cast_on_device<T>(other);
+      return managed_ptr<T, ExecutionStrategy::Managed>(other, hostPtr, devicePtr);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using dynamic_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using dynamic_cast.
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> dynamic_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      static_assert(true, "CUDA does not support dynamic_cast");
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using const_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using const_cast.
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> const_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      auto hostPtr = const_cast<T*>(other.get());
+      auto devicePtr = detail::const_pointer_cast_on_device<T>(other);
+      return managed_ptr<T, ExecutionStrategy::Managed>(other, hostPtr, devicePtr);
+   }
+
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Makes a new managed_ptr that shares ownership with the given managed_ptr, but
+   ///    the underlying pointer is converted using reinterpret_cast.
+   ///
+   /// @params[in] other The managed_ptr to share ownership with and whose pointer to
+   ///                      convert using reinterpret_cast.
+   ///
+   template <typename T, typename U>
+   CHAI_HOST managed_ptr<T, ExecutionStrategy::Managed> reinterpret_pointer_cast(const managed_ptr<U, ExecutionStrategy::Managed>& other) noexcept {
+      auto hostPtr = reinterpret_cast<T*>(other.get());
+      auto devicePtr = detail::reinterpret_pointer_cast_on_device<T>(other);
       return managed_ptr<T, ExecutionStrategy::Managed>(other, hostPtr, devicePtr);
    }
    
