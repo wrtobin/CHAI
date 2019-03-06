@@ -59,7 +59,7 @@ namespace chai {
       return make_managed_from_factory<T, F, Args...>(std::forward<ExecutionStrategy::Managed>(ExecutionStrategy::Managed{}), std::forward<F>(f), std::forward<Args>(args)...);
    }
 
-#else
+#else // __CUDACC__
 
    namespace ExecutionStrategy {
       struct Host {};
