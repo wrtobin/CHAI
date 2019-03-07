@@ -173,7 +173,7 @@ namespace chai {
          /// @param[in] hostPtr The host pointer to take ownership of
          ///
          template <typename U>
-         CHAI_HOST managed_ptr(U* hostPtr) :
+         explicit CHAI_HOST managed_ptr(U* hostPtr) :
             m_cpu(hostPtr),
             m_numReferences(new std::size_t{1})
          {
@@ -1279,7 +1279,7 @@ namespace chai {
          /// @param[in] devicePtr The device pointer to take ownership of
          ///
          template <typename U>
-         CHAI_HOST managed_ptr(U* devicePtr) :
+         explicit CHAI_HOST managed_ptr(U* devicePtr) :
             m_gpu(devicePtr),
             m_numReferences(new std::size_t{1})
          {
