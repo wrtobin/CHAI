@@ -5,20 +5,21 @@
 
 // Standard libary headers
 #include <cstddef>
+#include <functional>
 #include <tuple>
 
 namespace chai {
    template <typename T>
    class managed_ptr;
 
-#ifdef __CUDACC__
    namespace detail {
+#ifdef __CUDACC__
       ///
       /// @author Alan Dayton
       ///
       /// Creates a new T on the device.
       ///
-      /// @param[out] devicePtr Used to return the device pointer to the new T
+      /// @param[out] gpuPointer Used to return the device pointer to the new T
       /// @param[in]  args The arguments to T's constructor
       ///
       /// @note Cannot capture argument packs in an extended device lambda,
@@ -26,9 +27,9 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      __global__ void make_on_device(T*& devicePtr, Args... args)
+      __global__ void make_on_device(T*& gpuPointer, Args... args)
       {
-         devicePtr = new T(std::forward<Args>(args)...);
+         gpuPointer = new T(std::forward<Args>(args)...);
       }
 
       ///
@@ -36,7 +37,7 @@ namespace chai {
       ///
       /// Creates a new object on the device by calling the given factory method.
       ///
-      /// @param[out] devicePtr Used to return the device pointer to the new object
+      /// @param[out] gpuPointer Used to return the device pointer to the new object
       /// @param[in]  f The factory method (must be a __device__ or __host__ __device__
       ///                method
       /// @param[in]  args The arguments to the factory method
@@ -47,9 +48,9 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      __global__ void make_on_device_from_factory(T*& devicePtr, F f, Args... args)
+      __global__ void make_on_device_from_factory(T*& gpuPointer, F f, Args... args)
       {
-         devicePtr = f(std::forward<Args>(args)...);
+         gpuPointer = f(std::forward<Args>(args)...);
       }
 
       ///
@@ -57,13 +58,13 @@ namespace chai {
       ///
       /// Destroys the device pointer.
       ///
-      /// @param[out] devicePtr The device pointer to call delete on
+      /// @param[out] gpuPointer The device pointer to call delete on
       ///
       template <typename T>
-      __global__ void destroy_on_device(T*& devicePtr)
+      __global__ void destroy_on_device(T*& gpuPointer)
       {
-         if (devicePtr) {
-            delete devicePtr;
+         if (gpuPointer) {
+            delete gpuPointer;
          }
       }
 
@@ -72,14 +73,14 @@ namespace chai {
       ///
       /// Gets the device pointer from the managed_ptr.
       ///
-      /// @param[out] devicePtr Used to return the device pointer
+      /// @param[out] gpuPointer Used to return the device pointer
       /// @param[in]  other The managed_ptr from which to extract the device pointer
       ///
       template <typename T>
-      __global__ void get_on_device(T*& devicePtr,
+      __global__ void get_on_device(T*& gpuPointer,
                                     const managed_ptr<T>& other)
       {
-         devicePtr = other.get(GPU);
+         gpuPointer = other.get();
       }
 
       ///
@@ -87,17 +88,17 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using static_cast.
       ///
-      /// @param[out] devicePtr The device pointer that will contain the result of
+      /// @param[out] gpuPointer The device pointer that will contain the result of
       ///                           calling static_cast on the pointer contained by
       ///                           the given managed_ptr
       /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using static_cast
       ///
       template <typename T, typename U>
-      __global__ void static_pointer_cast_on_device(T*& devicePtr,
-                                                    const managed_ptr<U>& other)
+      __global__ void static_cast_on_device(T*& gpuPointer,
+                                            const managed_ptr<U>& other)
       {
-         devicePtr = static_cast<T*>(other.get(GPU));
+         gpuPointer = static_cast<T*>(other.get());
       }
 
       ///
@@ -105,16 +106,17 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using const_cast.
       ///
-      /// @param[out] devicePtr The device pointer that will contain the result of
+      /// @param[out] gpuPointer The device pointer that will contain the result of
       ///                           calling const_cast on the pointer contained by
       ///                           the given managed_ptr
       /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using const_cast
       ///
       template <typename T, typename U>
-      __global__ void const_pointer_cast_on_device(T*& devicePtr,
-                                                   const managed_ptr<U>& other) {
-         devicePtr = const_cast<T*>(other.get(GPU));
+      __global__ void const_cast_on_device(T*& gpuPointer,
+                                           const managed_ptr<U>& other)
+      {
+         gpuPointer = const_cast<T*>(other.get());
       }
 
       ///
@@ -122,16 +124,17 @@ namespace chai {
       ///
       /// Converts the underlying pointer on the device using reinterpret_cast.
       ///
-      /// @param[out] devicePtr The device pointer that will contain the result of
+      /// @param[out] gpuPointer The device pointer that will contain the result of
       ///                           calling reinterpret_cast on the pointer contained by
       ///                           the given managed_ptr
       /// @param[in] other The managed_ptr to share ownership with and whose pointer to
       ///                      convert using reinterpret_cast
       ///
       template <typename T, typename U>
-      __global__ void reinterpret_pointer_cast_on_device(T*& devicePtr,
-                                                         const managed_ptr<U>& other) {
-         devicePtr = reinterpret_cast<T*>(other.get(GPU));
+      __global__ void reinterpret_cast_on_device(T*& gpuPointer,
+                                                 const managed_ptr<U>& other)
+      {
+         gpuPointer = reinterpret_cast<T*>(other.get());
       }
 
       ///
@@ -146,10 +149,10 @@ namespace chai {
       template <typename T,
                 typename... Args>
       CHAI_HOST T* make_on_device(Args&&... args) {
-         T* devicePtr;
-         make_on_device<<<1, 1>>>(devicePtr, args...);
+         T* gpuPointer;
+         make_on_device<<<1, 1>>>(gpuPointer, args...);
          cudaDeviceSynchronize();
-         return devicePtr;
+         return gpuPointer;
       }
 
       ///
@@ -166,10 +169,10 @@ namespace chai {
                 typename F,
                 typename... Args>
       CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
-         T* devicePtr;
-         make_on_device_from_factory<T><<<1, 1>>>(devicePtr, f, args...);
+         T* gpuPointer;
+         make_on_device_from_factory<T><<<1, 1>>>(gpuPointer, f, args...);
          cudaDeviceSynchronize();
-         return devicePtr;
+         return gpuPointer;
       }
 
       ///
@@ -181,10 +184,10 @@ namespace chai {
       ///
       template <typename T>
       T* get_on_device(const managed_ptr<T>& other) {
-         T* devicePtr;
-         get_on_device<<<1, 1>>>(devicePtr, other);
+         T* gpuPointer;
+         get_on_device<<<1, 1>>>(gpuPointer, other);
          cudaDeviceSynchronize();
-         return devicePtr;
+         return gpuPointer;
       }
 
       ///
@@ -196,11 +199,11 @@ namespace chai {
       ///                      convert using static_cast
       ///
       template <typename T, typename U>
-      CHAI_HOST T* static_pointer_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* devicePtr;
-         static_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
+      CHAI_HOST T* static_cast_on_device(const managed_ptr<U>& other) noexcept {
+         T* gpuPointer;
+         static_cast_on_device<<<1, 1>>>(gpuPointer, other);
          cudaDeviceSynchronize();
-         return devicePtr;
+         return gpuPointer;
       }
 
       /// @author Alan Dayton
@@ -211,11 +214,11 @@ namespace chai {
       ///                      convert using const_cast
       ///
       template <typename T, typename U>
-      CHAI_HOST T* const_pointer_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* devicePtr;
-         const_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
+      CHAI_HOST T* const_cast_on_device(const managed_ptr<U>& other) noexcept {
+         T* gpuPointer;
+         const_cast_on_device<<<1, 1>>>(gpuPointer, other);
          cudaDeviceSynchronize();
-         return devicePtr;
+         return gpuPointer;
       }
 
       ///
@@ -227,103 +230,47 @@ namespace chai {
       ///                      convert using reinterpret_cast
       ///
       template <typename T, typename U>
-      CHAI_HOST T* reinterpret_pointer_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* devicePtr;
-         reinterpret_pointer_cast_on_device<<<1, 1>>>(devicePtr, other);
+      CHAI_HOST T* reinterpret_cast_on_device(const managed_ptr<U>& other) noexcept {
+         T* gpuPointer;
+         reinterpret_cast_on_device<<<1, 1>>>(gpuPointer, other);
          cudaDeviceSynchronize();
-         return devicePtr;
+         return gpuPointer;
       }
+#endif
    }
 
-   class managed_ptr_record {
-      public:
-         managed_ptr_record() = delete;
+   struct managed_ptr_record {
+      managed_ptr_record() :
+         m_num_references(1),
+         m_callback()
+      {
+      }
 
-#if 0
-         template <std::size_t N, typename U>
-         managed_ptr_record(const ExecutionSpace(&spaces)[N],
-                            const U*(&pointers)[N],
-                            std::function<void(Action, ExecutionSpace, void*)> callback = [] (Action action,
-    ExecutionSpace space,
-    void* pointer) {
-       switch (action) {
-          case ACTION_FREE:
-             switch (space) {
-                case CPU:
-                   delete static_cast<U*>(pointer);
-                   break;
-                case GPU:
-                   detail::destroy_on_device<<<1, 1>>>(static_cast<U*>(pointer));
-                   break;
-             }
-       }
-    }) :
-            m_numReferences(1),
-            m_callback(callback)
-         {
-            for (int i = 0; i < N; ++i) {
-               m_pointers[static_cast<size_t>(spaces[i])] = static_cast<void*>(pointers[i]);
-            }
-         }
-#endif
+      managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*&)> callback) :
+         m_num_references(1),
+         m_callback(callback)
+      {
+      }
 
-         managed_ptr_record(std::function<void(Action, ExecutionSpace, void*&)> callback) : m_numReferences(1), m_callback(callback) {}
+      size_t use_count() {
+         return m_num_references;
+      }
 
-         size_t use_count() {
-            return m_numReferences;
-         }
+      void addReference() {
+         m_num_references++;
+      }
 
-         virtual void incrementReferenceCount() {
-            m_numReferences++;
-         }
+      void removeReference() {
+         m_num_references--;
+      }
 
-         virtual void decrementReferenceCount() {
-            m_numReferences--;
+      ExecutionSpace getLastSpace() {
+         return m_last_space;
+      }
 
-            if (m_numReferences == 0) {
-               for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
-                  m_callback(ACTION_FREE, static_cast<ExecutionSpace>(space), m_pointers[space]);
-               }
-            }
-         }
-
-         virtual void* getActivePointer() {
-            ExecutionSpace activeSpace = getCurrentExecutionSpace();
-            return get(activeSpace);
-         }
-
-         virtual void* get(ExecutionSpace space=NONE) {
-            if (space == NONE) {
-               space = ArrayManager::getInstance()->getDefaultAllocationSpace();
-            }
-
-            move(space);
-
-            void* pointer = m_pointers[static_cast<size_t>(space)];
-
-            if (!pointer) {
-               m_callback(ACTION_ALLOC, space, pointer);
-            }
-
-            return pointer;
-         }
-
-         inline ExecutionSpace getCurrentExecutionSpace() {
-            return ArrayManager::getInstance()->getExecutionSpace();
-         }
-
-      private:
-         void* m_pointers[NUM_EXECUTION_SPACES]; /// The pointers
-         size_t m_numReferences = 1; /// The reference counter
-         ExecutionSpace m_lastSpace = NONE; /// The last space executed in
-         std::function<void(Action, ExecutionSpace, void*&)> m_callback; /// Callback to handle events
-
-         void move(ExecutionSpace space) {
-            if (space != NONE && m_lastSpace != space) {
-               m_lastSpace = space;
-               m_callback(ACTION_MOVE, space, m_pointers[space]);
-            }
-         }
+      size_t m_num_references = 1; /// The reference counter
+      ExecutionSpace m_last_space = NONE; /// The last space executed in
+      std::function<bool(Action, ExecutionSpace, void*&)> m_callback; /// Callback to handle events
    };
 
    ///
@@ -385,63 +332,87 @@ namespace chai {
          ///
          /// @author Alan Dayton
          ///
-         /// Constructs a managed_ptr from the given host and device pointers.
+         /// Constructs a managed_ptr from the given pointers. U* must be convertible
+         ///    to T*.
          ///
          /// @param[in] pointers The pointers to take ownership of
          ///
-         managed_ptr(std::function<void(Action, ExecutionSpace, void*&)> callback,
-                     ExecutionSpace activeSpace=NONE) :
-            m_active_pointer(nullptr),
-            m_pointer_record(new managed_ptr_record(callback))
+         template <typename U>
+         explicit managed_ptr(std::initializer_list<std::pair<ExecutionSpace, U*>> pointers) :
+            m_cpu_pointer(nullptr),
+            m_gpu_pointer(nullptr),
+            m_pointer_record(new managed_ptr_record())
          {
-            m_active_pointer = static_cast<T*>(m_pointer_record->get(activeSpace));
+            static_assert(std::is_convertible<U*, T*>::value,
+                          "U* must be convertible to T*.");
+
+            for (auto& pointer : pointers) {
+               switch (pointer.first) {
+                  case CPU:
+                     m_cpu_pointer = pointer.second;
+                     break;
+                  case GPU:
+                     m_gpu_pointer = pointer.second;
+                     break;
+                  default:
+                     printf("Execution space not supported by chai::managed_ptr!");
+                     break;
+               }
+            }
          }
 
          ///
          /// @author Alan Dayton
          ///
-         /// Constructs a managed_ptr from the given host and device pointers.
+         /// Constructs a managed_ptr from the given pointers and callback function.
+         ///    U* must be convertible to T*.
          ///
          /// @param[in] pointers The pointers to take ownership of
+         /// @param[in] callback The user defined callback to call on trigger events
          ///
-#if 0
          template <typename U>
-         CHAI_HOST managed_ptr(std::initializer_list<ExecutionSpace>& spaces,
-                               std::initializer_list<U*>& pointers,
-                               std::function<void(Action, ExecutionSpace, void*)> callback,
-                               ExecutionSpace activeSpace = NONE) :
-#endif
-#if 0
-         template <std::size_t N, typename U>
-         CHAI_HOST managed_ptr(const ExecutionSpace(&spaces)[N],
-                               const U*(&pointers)[N],
-                               std::function<void(Action, ExecutionSpace, void*)> callback,
-                               ExecutionSpace activeSpace) :
-            m_active_pointer(nullptr),
-            m_pointer_record(new managed_ptr_record<T>(spaces, pointers, callback))
+         CHAI_HOST managed_ptr(std::initializer_list<std::pair<ExecutionSpace, U*>> pointers,
+                               std::function<bool(Action, ExecutionSpace, void*&)> callback) :
+            m_cpu_pointer(nullptr),
+            m_gpu_pointer(nullptr),
+            m_pointer_record(new managed_ptr_record(callback))
          {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
 
-            m_active_pointer = static_cast<T*>(m_pointer_record->get(activeSpace));
+            for (auto& pointer : pointers) {
+               switch (pointer.first) {
+                  case CPU:
+                     m_cpu_pointer = pointer.second;
+                     break;
+                  case GPU:
+                     m_gpu_pointer = pointer.second;
+                     break;
+                  default:
+                     printf("Execution space not supported by chai::managed_ptr!");
+                     break;
+               }
+            }
          }
-#endif
 
          ///
          /// @author Alan Dayton
          ///
          /// Copy constructor.
-         /// Constructs a copy of the given managed_ptr and increases the reference count.
+         /// Constructs a copy of the given managed_ptr, increases the reference count,
+         ///    and if the execution space is different, calls the user defined callback
+         ///    with ACTION_MOVE for each of the execution spaces.
          ///
          /// @param[in] other The managed_ptr to copy
          ///
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr& other) noexcept :
-            m_active_pointer(other.m_active_pointer),
+            m_cpu_pointer(other.m_cpu_pointer),
+            m_gpu_pointer(other.m_gpu_pointer),
             m_pointer_record(other.m_pointer_record)
          {
 #ifndef __CUDA_ARCH__
-            m_active_pointer = static_cast<T*>(m_pointer_record->get());
-            incrementReferenceCount();
+            addReference();
+            move();
 #endif
          }
 
@@ -449,22 +420,25 @@ namespace chai {
          /// @author Alan Dayton
          ///
          /// Converting constructor.
-         /// Constructs a copy of the given managed_ptr and increases the reference count.
-         ///    U must be convertible to T.
+         /// Constructs a copy of the given managed_ptr, increases the reference count,
+         ///    and if the execution space is different, calls the user defined callback
+         ///    with ACTION_MOVE for each of the execution spaces. U* must be convertible
+         ///    to T*.
          ///
          /// @param[in] other The managed_ptr to copy
          ///
          template <typename U>
          CHAI_HOST_DEVICE managed_ptr(const managed_ptr<U>& other) noexcept :
-            m_active_pointer(other.m_active_pointer),
+            m_cpu_pointer(other.m_cpu_pointer),
+            m_gpu_pointer(other.m_gpu_pointer),
             m_pointer_record(other.m_pointer_record)
          {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
 
 #ifndef __CUDA_ARCH__
-            m_active_pointer = static_cast<T*>(m_pointer_record->get());
-            incrementReferenceCount();
+            addReference();
+            move();
 #endif
          }
 
@@ -472,20 +446,32 @@ namespace chai {
          /// @author Alan Dayton
          ///
          /// Aliasing constructor.
-         /// Has the same ownership information as other, but holds a different pointer.
+         /// Has the same ownership information as other, but holds different pointers.
          ///
          /// @param[in] other The managed_ptr to copy ownership information from
-         /// @param[in] hostPtr The host pointer to maintain a reference to
-         /// @param[in] devicePtr The device pointer to maintain a reference to
+         /// @param[in] pointers The pointers to maintain a reference to
          ///
          template <typename U>
          CHAI_HOST managed_ptr(const managed_ptr<U>& other,
-                               std::function<void(Action, ExecutionSpace, void*&)> callback) noexcept :
-            m_active_pointer(other.m_active_pointer),
+                               std::initializer_list<std::pair<ExecutionSpace, T*>> pointers) noexcept :
             m_pointer_record(other.m_pointer_record)
          {
-            m_active_pointer = static_cast<T*>(m_pointer_record->get());
-            incrementReferenceCount();
+            for (auto& pointer : pointers) {
+               switch (pointer.first) {
+                  case CPU:
+                     m_cpu_pointer = pointer.second;
+                     break;
+                  case GPU:
+                     m_gpu_pointer = pointer.second;
+                     break;
+                  default:
+                     printf("Execution space not supported by chai::managed_ptr!");
+                     break;
+               }
+            }
+
+            addReference();
+            move();
          }
 
          ///
@@ -496,7 +482,7 @@ namespace chai {
          ///
          CHAI_HOST_DEVICE ~managed_ptr() {
 #ifndef __CUDA_ARCH__
-            decrementReferenceCount();
+            removeReference();
 #endif
          }
 
@@ -511,15 +497,16 @@ namespace chai {
          CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr& other) noexcept {
             if (this != &other) {
 #ifndef __CUDA_ARCH__
-               decrementReferenceCount();
+               removeReference();
 #endif
 
-               m_active_pointer = other.m_active_pointer;
+               m_cpu_pointer = other.m_cpu_pointer;
+               m_gpu_pointer = other.m_gpu_pointer;
                m_pointer_record = other.m_pointer_record;
 
 #ifndef __CUDA_ARCH__
-               m_active_pointer = static_cast<T*>(m_pointer_record->get());
-               incrementReferenceCount();
+               addReference();
+               move();
 #endif
             }
 
@@ -531,25 +518,26 @@ namespace chai {
          ///
          /// Conversion copy assignment operator.
          /// Copies the given managed_ptr and increases the reference count.
-         ///    U must be convertible to T.
+         ///    U* must be convertible to T*.
          ///
          /// @param[in] other The managed_ptr to copy
          ///
-         template<class U>
+         template <typename U>
          CHAI_HOST_DEVICE managed_ptr& operator=(const managed_ptr<U>& other) noexcept {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
 
 #ifndef __CUDA_ARCH__
-            decrementReferenceCount();
+            removeReference();
 #endif
 
-            m_active_pointer = other.m_active_pointer;
+            m_cpu_pointer = other.m_cpu_pointer;
+            m_gpu_pointer = other.m_gpu_pointer;
             m_pointer_record = other.m_pointer_record;
 
 #ifndef __CUDA_ARCH__
-            m_active_pointer = static_cast<T*>(m_pointer_record->get());
-            incrementReferenceCount();
+            addReference();
+            move();
 #endif
 
             return *this;
@@ -560,10 +548,28 @@ namespace chai {
          ///
          /// Returns the CPU or GPU pointer depending on the calling context.
          ///
-         CHAI_HOST_DEVICE inline T* get() const { return m_active_pointer; }
+         CHAI_HOST_DEVICE inline T* get() const {
+#ifndef __CUDA_ARCH__
+            move();
+            return m_cpu_pointer;
+#else
+            return m_gpu_pointer;
+#endif
+         }
 
-         CHAI_HOST inline T* get(ExecutionSpace space) const {
-            return static_cast<T*>(m_pointer_record->get(space));
+         CHAI_HOST inline T* get(const ExecutionSpace space, const bool move=true) const {
+            if (move) {
+               this->move();
+            }
+
+            switch (space) {
+               case CPU:
+                  return m_cpu_pointer;
+               case GPU:
+                  return m_gpu_pointer;
+               default:
+                  return nullptr;
+            }
          }
 
          ///
@@ -571,14 +577,26 @@ namespace chai {
          ///
          /// Returns the CPU or GPU pointer depending on the calling context.
          ///
-         CHAI_HOST_DEVICE inline T* operator->() const { return m_active_pointer; }
+         CHAI_HOST_DEVICE inline T* operator->() const {
+#ifndef __CUDA_ARCH__
+            return m_cpu_pointer;
+#else
+            return m_gpu_pointer;
+#endif
+         }
 
          ///
          /// @author Alan Dayton
          ///
          /// Returns the CPU or GPU reference depending on the calling context.
          ///
-         CHAI_HOST_DEVICE inline T& operator*() const { return *m_active_pointer; }
+         CHAI_HOST_DEVICE inline T& operator*() const {
+#ifndef __CUDA_ARCH__
+            return *m_cpu_pointer;
+#else
+            return *m_gpu_pointer;
+#endif
+         }
 
          ///
          /// @author Alan Dayton
@@ -600,20 +618,7 @@ namespace chai {
          /// Returns true if the contained pointer is not nullptr, false otherwise.
          ///
          CHAI_HOST_DEVICE inline explicit operator bool() const noexcept {
-            return m_active_pointer != nullptr;
-         }
-
-         ///
-         /// @author Alan Dayton
-         ///
-         /// Implicit conversion operator to T*. Be careful when using this because
-         /// data movement is not triggered by the raw pointer.
-         ///
-         CHAI_HOST_DEVICE inline operator T*() const {
-#ifndef __CUDA_ARCH__
-            //m_copier(m_copyArguments);
-#endif
-            return get();
+            return get() != nullptr;
          }
 
       private:
@@ -624,16 +629,32 @@ namespace chai {
          template <typename U>
          friend class managed_ptr; /// Needed for the converting constructor
 
+         CHAI_HOST void move() const {
+            if (m_pointer_record) {
+               ExecutionSpace newSpace = ArrayManager::getInstance()->getExecutionSpace();
+               
+               if (newSpace != NONE && newSpace != m_pointer_record->getLastSpace()) {
+                  m_pointer_record->m_last_space = newSpace;
+
+                  for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
+                     ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
+                     void* pointer = static_cast<void*>(get(execSpace, false));
+
+                     m_pointer_record->m_callback(ACTION_MOVE, execSpace, pointer);
+                  }
+               }
+            }
+         }
+
          ///
          /// @author Alan Dayton
          ///
          /// Increments the reference count and calls the copy constructor to
          ///    trigger data movement.
          ///
-         CHAI_HOST void incrementReferenceCount() {
+         CHAI_HOST void addReference() {
             if (m_pointer_record) {
-               m_pointer_record->incrementReferenceCount();
-               m_active_pointer = static_cast<T*>(m_pointer_record->getActivePointer());
+               m_pointer_record->addReference();
             }
          }
 
@@ -643,11 +664,51 @@ namespace chai {
          /// Decrements the reference counter. If the resulting number of references
          ///    is 0, clean up the object.
          ///
-         CHAI_HOST void decrementReferenceCount() {
+         CHAI_HOST void removeReference() {
             if (m_pointer_record) {
-               m_pointer_record->decrementReferenceCount();
+               m_pointer_record->removeReference();
 
                if (m_pointer_record->use_count() == 0) {
+                  if (m_pointer_record->m_callback) {
+                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
+                        ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
+                        T* pointer = get(execSpace, false);
+                        void* voidPointer = static_cast<void*>(pointer);
+
+                        if (!m_pointer_record->m_callback(ACTION_FREE,
+                                                          execSpace,
+                                                          voidPointer)) {
+                           switch (execSpace) {
+                              case CPU:
+                                 delete pointer;
+                                 break;
+                              case GPU:
+                                 detail::destroy_on_device<<<1, 1>>>(pointer);
+                                 break;
+                              default:
+                                 break;
+                           }
+                        }
+                     }
+                  }
+                  else {
+                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
+                        ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
+                        T* pointer = get(execSpace, false);
+
+                        switch (execSpace) {
+                           case CPU:
+                              delete pointer;
+                              break;
+                           case GPU:
+                              detail::destroy_on_device<<<1, 1>>>(pointer);
+                              break;
+                           default:
+                              break;
+                        }
+                     }
+                  }
+
                   delete m_pointer_record;
                }
             }
@@ -733,7 +794,7 @@ namespace chai {
    }
 
    // Adapted from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
-   template<typename ...T, size_t ...I>
+   template <typename ...T, size_t ...I>
    void freeManagedArraysHelper(std::tuple<T...> &ts, index_sequence<I...>) {
       //std::tie((doFreeManagedArrays(std::get<I>(ts)), 1) ... );
       doFreeManagedArrays(std::get<I>(ts)...);
@@ -764,56 +825,48 @@ namespace chai {
       static_assert(std::is_constructible<T, Args...>::value,
                     "Type T must be constructible with the given arguments.");
 
+      // Construct GPU and CPU pointers. Build the GPU pointer first so we can
+      // take advantage of asynchrony.
+      T* gpuPointer = detail::make_on_device<T>(args...);
+      T* cpuPointer = new T(args...);
+
+      // Get all the CHAI managed arguments so that we can build a callback that
+      // triggers memory transfers.
       auto managedArguments = getManagedArguments(std::forward<Args>(args)...);
 
-      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable {
-         switch (action) {
-            case ACTION_ALLOC:
-            {
-               switch (space) {
-                  case CPU:
-                     pointer = static_cast<void*>(new T(args...));
-                     break;
-                  case GPU:
-                     pointer = static_cast<void*>(detail::make_on_device<T>(args...));
-                     break;
+      // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
+      // event.
+      std::function<bool(Action, ExecutionSpace, void*&)> callback =
+         [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
+            switch (action) {
+               case ACTION_MOVE:
+               {
+                  auto temp = managedArguments;
+                  (void)temp;
+                  return true;
                }
-
-               break;
-            }
-            case ACTION_MOVE:
-            {
-               auto temp = managedArguments;
-               (void)temp;
-               break;
-            }
-            case ACTION_FREE:
-            {
-               switch (space) {
-                  case CPU:
-                  {
-                     delete static_cast<T*>(pointer);
-                     break;
-                  }
-                  case GPU:
-                  {
-                     T* typedPointer = static_cast<T*>(pointer);
-                     detail::destroy_on_device<<<1, 1>>>(typedPointer);
-                     break;
-                  }
-                  case NONE:
-                  {
-                     freeManagedArrays(managedArguments);
-                     break;
+               case ACTION_FREE:
+               {
+                  switch (space) {
+                     case NONE:
+                     {
+                        freeManagedArrays(managedArguments);
+                        return true;
+                     }
+                     default:
+                     {
+                        return false;
+                     }
                   }
                }
-
-               break;
+               default:
+               {
+                  return false;
+               }
             }
-         }
-      };
+         };
 
-      return managed_ptr<T>(callback);
+      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
    }
 
    template <typename T>
@@ -843,56 +896,48 @@ namespace chai {
              typename... Args,
              typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
    CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
+      // Construct GPU and CPU pointers. Build the GPU pointer first so we can
+      // take advantage of asynchrony.
+      // TODO: getRawPointers should be called on the device or with an execution space
+      T* gpuPointer = detail::make_on_device<T>(getRawPointers(args)...);
+      T* cpuPointer = new T(getRawPointers(args)...);
+
+      // Get all the CHAI managed arguments so that we can build a callback that
+      // triggers memory transfers.
       auto managedArguments = getManagedArguments(args...);
 
-      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable {
+      // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
+      // event.
+      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
          switch (action) {
-            case ACTION_ALLOC:
-            {
-               switch (space) {
-                  case CPU:
-                     pointer = static_cast<void*>(new T(getRawPointers(args)...));
-                     break;
-                  case GPU:
-                     pointer = static_cast<void*>(detail::make_on_device<T>(getRawPointers(args)...));
-                     break;
-               }
-
-               break;
-            }
             case ACTION_MOVE:
             {
                auto temp = managedArguments;
                (void)temp;
-               break;
+               return true;
             }
             case ACTION_FREE:
             {
                switch (space) {
-                  case CPU:
-                  {
-                     delete static_cast<T*>(pointer);
-                     break;
-                  }
-                  case GPU:
-                  {
-                     T* typedPointer = static_cast<T*>(pointer);
-                     detail::destroy_on_device<<<1, 1>>>(typedPointer);
-                     break;
-                  }
                   case NONE:
                   {
                      freeManagedArrays(managedArguments);
-                     break;
+                     return true;
+                  }
+                  default:
+                  {
+                     return false;
                   }
                }
-
-               break;
+            }
+            default:
+            {
+               return false;
             }
          }
       };
 
-      return managed_ptr<T>(callback);
+      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
    }
 
    ///
@@ -916,56 +961,41 @@ namespace chai {
       static_assert(std::is_convertible<R*, T*>::value,
                     "Factory function must return a type that is convertible to T*.");
 
+      T* gpuPointer = detail::make_on_device_from_factory<R>(f, args...);
+      T* cpuPointer = f(args...);
+
       auto managedArguments = getManagedArguments(args...);
 
-      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable {
+      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
          switch (action) {
-            case ACTION_ALLOC:
-            {
-               switch (space) {
-                  case CPU:
-                     pointer = static_cast<void*>(f(args...));
-                     break;
-                  case GPU:
-                     pointer = static_cast<void*>(detail::make_on_device_from_factory<R>(f, args...));
-                     break;
-               }
-
-               break;
-            }
             case ACTION_MOVE:
             {
                auto temp = managedArguments;
                (void)temp;
-               break;
+               return true;
             }
             case ACTION_FREE:
             {
                switch (space) {
-                  case CPU:
-                  {
-                     delete static_cast<T*>(pointer);
-                     break;
-                  }
-                  case GPU:
-                  {
-                     T* typedPointer = static_cast<T*>(pointer);
-                     detail::destroy_on_device<<<1, 1>>>(typedPointer);
-                     break;
-                  }
                   case NONE:
                   {
                      freeManagedArrays(managedArguments);
-                     break;
+                     return true;
+                  }
+                  default:
+                  {
+                     return false;
                   }
                }
-
-               break;
+            }
+            default:
+            {
+               return false;
             }
          }
       };
 
-      return managed_ptr<T>(callback);
+      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
    }
 
    ///
@@ -979,37 +1009,9 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> static_pointer_cast(const managed_ptr<U>& other) noexcept {
-      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable {
-         if (other.m_pointer_record) {
-            other.m_pointer_record->m_callback(action, space, pointer);
-
-            switch (action) {
-               case ACTION_ALLOC:
-               {
-                  other.m_pointer_record->m_callback(action, space, pointer);
-                  U* oldPointer = static_cast<U*>(pointer);
-                  T* newPointer;
-
-                  switch (space) {
-                     case CPU:
-                        newPointer = static_cast<T*>(oldPointer);
-                        break;
-                     case GPU:
-                        newPointer = detail::static_pointer_cast_on_device<T>(other);
-                        break;
-                  }
-
-                  break;
-               }
-               default:
-                  break;
-            }
-         }
-      };
-
-      auto hostPtr = static_cast<T*>(other.get());
-      auto devicePtr = detail::static_pointer_cast_on_device<T>(other);
-      return managed_ptr<T>(other, {hostPtr, devicePtr});
+      T* gpuPointer = detail::static_cast_on_device<T>(other);
+      T* cpuPointer = static_cast<T*>(other.get());
+      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
    }
 
    ///
@@ -1023,7 +1025,15 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> dynamic_pointer_cast(const managed_ptr<U>& other) noexcept {
-      static_assert(true, "CUDA does not support dynamic_cast");
+      T* cpuPointer = dynamic_cast<T*>(other.get());
+      T* gpuPointer = nullptr;
+
+      if (cpuPointer) {
+         gpuPointer = detail::static_cast_on_device<T>(other);
+         printf("WARNING! CUDA does not support dynamic_cast. Using static_cast instead.");
+      }
+
+      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
    }
 
    ///
@@ -1037,9 +1047,9 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> const_pointer_cast(const managed_ptr<U>& other) noexcept {
-      auto hostPtr = const_cast<T*>(other.get());
-      auto devicePtr = detail::const_pointer_cast_on_device<T>(other);
-      return managed_ptr<T>(other, {hostPtr, devicePtr});
+      T* gpuPointer = detail::const_cast_on_device<T>(other);
+      T* cpuPointer = const_cast<T*>(other.get());
+      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
    }
 
    ///
@@ -1053,13 +1063,11 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> reinterpret_pointer_cast(const managed_ptr<U>& other) noexcept {
-      auto hostPtr = reinterpret_cast<T*>(other.get());
-      auto devicePtr = detail::reinterpret_pointer_cast_on_device<T>(other);
-      return managed_ptr<T>(other, {hostPtr, devicePtr});
+      T* gpuPointer = detail::reinterpret_cast_on_device<T>(other);
+      T* cpuPointer = reinterpret_cast<T*>(other.get());
+      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
    }
    
-#endif // __CUDACC__
-
    /// Comparison operators
 
    ///
@@ -1070,7 +1078,7 @@ namespace chai {
    /// @param[in] lhs The first managed_ptr to compare
    /// @param[in] rhs The second managed_ptr to compare
    ///
-   template <class T, class U>
+   template <typename T, typename U>
    CHAI_HOST_DEVICE CHAI_INLINE
    bool operator==(const managed_ptr<T>& lhs, const managed_ptr<U>& rhs) noexcept {
       return lhs.get() == rhs.get();
@@ -1084,7 +1092,7 @@ namespace chai {
    /// @param[in] lhs The first managed_ptr to compare
    /// @param[in] rhs The second managed_ptr to compare
    ///
-   template <class T, class U>
+   template <typename T, typename U>
    CHAI_HOST_DEVICE CHAI_INLINE
    bool operator!=(const managed_ptr<T>& lhs, const managed_ptr<U>& rhs) noexcept {
       return lhs.get() != rhs.get();
@@ -1099,7 +1107,7 @@ namespace chai {
    ///
    /// @param[in] lhs The managed_ptr to compare to nullptr
    ///
-   template<class T>
+   template <typename T>
    CHAI_HOST_DEVICE CHAI_INLINE
    bool operator==(const managed_ptr<T>& lhs, std::nullptr_t) noexcept {
       return lhs.get() == nullptr;
@@ -1112,7 +1120,7 @@ namespace chai {
    ///
    /// @param[in] rhs The managed_ptr to compare to nullptr
    ///
-   template<class T>
+   template <typename T>
    CHAI_HOST_DEVICE CHAI_INLINE
    bool operator==(std::nullptr_t, const managed_ptr<T>& rhs) noexcept {
       return nullptr == rhs.get();
@@ -1125,7 +1133,7 @@ namespace chai {
    ///
    /// @param[in] lhs The managed_ptr to compare to nullptr
    ///
-   template<class T>
+   template <typename T>
    CHAI_HOST_DEVICE CHAI_INLINE
    bool operator!=(const managed_ptr<T>& lhs, std::nullptr_t) noexcept {
       return lhs.get() != nullptr;
@@ -1138,13 +1146,13 @@ namespace chai {
    ///
    /// @param[in] rhs The managed_ptr to compare to nullptr
    ///
-   template<class T>
+   template <typename T>
    CHAI_HOST_DEVICE CHAI_INLINE
    bool operator!=(std::nullptr_t, const managed_ptr<T>& rhs) noexcept {
       return nullptr != rhs.get();
    }
 
-   template <class T>
+   template <typename T>
    void swap(managed_ptr<T>& lhs, managed_ptr<T>& rhs) noexcept {
       std::swap(lhs.m_active_pointer, rhs.m_active_pointer);
       std::swap(lhs.m_pointer_record, rhs.m_pointer_record);
