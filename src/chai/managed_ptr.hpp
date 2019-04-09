@@ -338,7 +338,8 @@ namespace chai {
          /// @param[in] pointers The pointers to take ownership of
          ///
          template <typename U>
-         explicit managed_ptr(std::initializer_list<std::pair<ExecutionSpace, U*>> pointers) :
+         managed_ptr(std::initializer_list<ExecutionSpace> spaces,
+                     std::initializer_list<U*> pointers) :
             m_cpu_pointer(nullptr),
             m_gpu_pointer(nullptr),
             m_pointer_record(new managed_ptr_record())
@@ -346,14 +347,16 @@ namespace chai {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
 
-            for (auto& pointer : pointers) {
-               switch (pointer.first) {
+            int i = 0;
+
+            for (const auto& space : spaces) {
+               switch (space) {
                   case CPU:
-                     m_cpu_pointer = pointer.second;
+                     m_cpu_pointer = pointers.begin()[i++];
                      break;
 #ifdef __CUDACC__
                   case GPU:
-                     m_gpu_pointer = pointer.second;
+                     m_gpu_pointer = pointers.begin()[i++];
                      break;
 #endif
                   default:
@@ -373,7 +376,8 @@ namespace chai {
          /// @param[in] callback The user defined callback to call on trigger events
          ///
          template <typename U>
-         CHAI_HOST managed_ptr(std::initializer_list<std::pair<ExecutionSpace, U*>> pointers,
+         CHAI_HOST managed_ptr(std::initializer_list<ExecutionSpace> spaces,
+                               std::initializer_list<U*> pointers,
                                std::function<bool(Action, ExecutionSpace, void*&)> callback) :
             m_cpu_pointer(nullptr),
             m_gpu_pointer(nullptr),
@@ -382,14 +386,16 @@ namespace chai {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
 
-            for (auto& pointer : pointers) {
-               switch (pointer.first) {
+            int i = 0;
+
+            for (const auto& space : spaces) {
+               switch (space) {
                   case CPU:
-                     m_cpu_pointer = pointer.second;
+                     m_cpu_pointer = pointers.begin()[i++];
                      break;
 #ifdef __CUDACC__
                   case GPU:
-                     m_gpu_pointer = pointer.second;
+                     m_gpu_pointer = pointers.begin()[i++];
                      break;
 #endif
                   default:
@@ -457,17 +463,20 @@ namespace chai {
          ///
          template <typename U>
          CHAI_HOST managed_ptr(const managed_ptr<U>& other,
-                               std::initializer_list<std::pair<ExecutionSpace, T*>> pointers) noexcept :
+                               std::initializer_list<ExecutionSpace> spaces,
+                               std::initializer_list<T*> pointers) noexcept :
             m_pointer_record(other.m_pointer_record)
          {
-            for (auto& pointer : pointers) {
-               switch (pointer.first) {
+            int i = 0;
+
+            for (const auto& space : spaces) {
+               switch (space) {
                   case CPU:
-                     m_cpu_pointer = pointer.second;
+                     m_cpu_pointer = pointers.begin()[i++];
                      break;
 #ifdef __CUDACC__
                   case GPU:
-                     m_gpu_pointer = pointer.second;
+                     m_gpu_pointer = pointers.begin()[i++];
                      break;
 #endif
                   default:
@@ -882,9 +891,9 @@ namespace chai {
          };
 
 #ifdef __CUDACC__
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, callback);
 #else
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
+      return managed_ptr<T>({CPU}, {cpuPointer}, callback);
 #endif
    }
 
@@ -960,9 +969,9 @@ namespace chai {
       };
 
 #ifdef __CUDACC__
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, callback);
 #else
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
+      return managed_ptr<T>({CPU}, {cpuPointer}, callback);
 #endif
    }
 
@@ -1025,9 +1034,9 @@ namespace chai {
       };
 
 #ifdef __CUDACC__
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, callback);
 #else
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
+      return managed_ptr<T>({CPU}, {cpuPointer}, callback);
 #endif
    }
 
@@ -1049,9 +1058,9 @@ namespace chai {
       T* cpuPointer = static_cast<T*>(other.get());
 
 #ifdef __CUDACC__
-      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+      return managed_ptr<T>(other, {CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+      return managed_ptr<T>(other, {CPU}, {cpuPointer});
 #endif
    }
 
@@ -1076,9 +1085,9 @@ namespace chai {
          printf("WARNING! CUDA does not support dynamic_cast. Using static_cast instead.");
       }
 
-      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+      return managed_ptr<T>(other, {CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+      return managed_ptr<T>(other, {CPU}, {cpuPointer});
 #endif
    }
 
@@ -1100,9 +1109,9 @@ namespace chai {
       T* cpuPointer = const_cast<T*>(other.get());
 
 #ifdef __CUDACC__
-      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+      return managed_ptr<T>(other, {CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+      return managed_ptr<T>(other, {CPU}, {cpuPointer});
 #endif
    }
 
@@ -1124,9 +1133,9 @@ namespace chai {
       T* cpuPointer = reinterpret_cast<T*>(other.get());
 
 #ifdef __CUDACC__
-      return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+      return managed_ptr<T>(other, {CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+      return managed_ptr<T>(other, {CPU}, {cpuPointer});
 #endif
    }
    
