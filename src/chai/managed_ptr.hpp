@@ -347,6 +347,11 @@ namespace chai {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
 
+            // TODO: In c++14 convert to a static_assert
+            if (spaces.size() != pointers.size()) {
+               printf("WARNING: The number of spaces is different than the number of pointers given.");
+            }
+
             int i = 0;
 
             for (const auto& space : spaces) {
@@ -385,6 +390,11 @@ namespace chai {
          {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
+
+            // TODO: In c++14 convert to a static_assert
+            if (spaces.size() != pointers.size()) {
+               printf("WARNING: The number of spaces is different than the number of pointers given.");
+            }
 
             int i = 0;
 
@@ -467,6 +477,11 @@ namespace chai {
                                std::initializer_list<T*> pointers) noexcept :
             m_pointer_record(other.m_pointer_record)
          {
+            // TODO: In c++14 convert to a static_assert
+            if (spaces.size() != pointers.size()) {
+               printf("WARNING: The number of spaces is different than the number of pointers given.");
+            }
+
             int i = 0;
 
             for (const auto& space : spaces) {
