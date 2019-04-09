@@ -351,9 +351,11 @@ namespace chai {
                   case CPU:
                      m_cpu_pointer = pointer.second;
                      break;
+#ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointer.second;
                      break;
+#endif
                   default:
                      printf("Execution space not supported by chai::managed_ptr!");
                      break;
@@ -385,9 +387,11 @@ namespace chai {
                   case CPU:
                      m_cpu_pointer = pointer.second;
                      break;
+#ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointer.second;
                      break;
+#endif
                   default:
                      printf("Execution space not supported by chai::managed_ptr!");
                      break;
@@ -461,9 +465,11 @@ namespace chai {
                   case CPU:
                      m_cpu_pointer = pointer.second;
                      break;
+#ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointer.second;
                      break;
+#endif
                   default:
                      printf("Execution space not supported by chai::managed_ptr!");
                      break;
@@ -565,8 +571,10 @@ namespace chai {
             switch (space) {
                case CPU:
                   return m_cpu_pointer;
+#ifdef __CUDACC__
                case GPU:
                   return m_gpu_pointer;
+#endif
                default:
                   return nullptr;
             }
@@ -682,9 +690,11 @@ namespace chai {
                               case CPU:
                                  delete pointer;
                                  break;
+#ifdef __CUDACC__
                               case GPU:
                                  detail::destroy_on_device<<<1, 1>>>(pointer);
                                  break;
+#endif
                               default:
                                  break;
                            }
@@ -700,9 +710,11 @@ namespace chai {
                            case CPU:
                               delete pointer;
                               break;
+#ifdef __CUDACC__
                            case GPU:
                               detail::destroy_on_device<<<1, 1>>>(pointer);
                               break;
+#endif
                            default:
                               break;
                         }
@@ -784,7 +796,7 @@ namespace chai {
    struct make_index_sequence<0, I...> : public index_sequence<I...> {};
 
    template <typename T>
-   void doFreeManagedArrays(T arg) {}
+   void doFreeManagedArrays(T) {}
 
    template <typename T>
    void doFreeManagedArrays(ManagedArray<T> arg) {
@@ -806,7 +818,7 @@ namespace chai {
    }
 
    template <>
-   void freeManagedArrays(std::tuple<>& args) {
+   void freeManagedArrays(std::tuple<>&) {
       return;
    }
 
@@ -827,7 +839,10 @@ namespace chai {
 
       // Construct GPU and CPU pointers. Build the GPU pointer first so we can
       // take advantage of asynchrony.
+#ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device<T>(args...);
+#endif
+
       T* cpuPointer = new T(args...);
 
       // Get all the CHAI managed arguments so that we can build a callback that
@@ -866,7 +881,11 @@ namespace chai {
             }
          };
 
+#ifdef __CUDACC__
       return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
+#else
+      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, callback);
+#endif
    }
 
    template <typename T>
@@ -899,7 +918,10 @@ namespace chai {
       // Construct GPU and CPU pointers. Build the GPU pointer first so we can
       // take advantage of asynchrony.
       // TODO: getRawPointers should be called on the device or with an execution space
+#ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device<T>(getRawPointers(args)...);
+#endif
+
       T* cpuPointer = new T(getRawPointers(args)...);
 
       // Get all the CHAI managed arguments so that we can build a callback that
@@ -937,7 +959,11 @@ namespace chai {
          }
       };
 
+#ifdef __CUDACC__
       return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
+#else
+      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
+#endif
    }
 
    ///
@@ -961,7 +987,10 @@ namespace chai {
       static_assert(std::is_convertible<R*, T*>::value,
                     "Factory function must return a type that is convertible to T*.");
 
+#ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device_from_factory<R>(f, args...);
+#endif
+
       T* cpuPointer = f(args...);
 
       auto managedArguments = getManagedArguments(args...);
@@ -995,7 +1024,11 @@ namespace chai {
          }
       };
 
+#ifdef __CUDACC__
       return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
+#else
+      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
+#endif
    }
 
    ///
@@ -1009,9 +1042,17 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> static_pointer_cast(const managed_ptr<U>& other) noexcept {
+#ifdef __CUDACC__
       T* gpuPointer = detail::static_cast_on_device<T>(other);
+#endif
+
       T* cpuPointer = static_cast<T*>(other.get());
+
+#ifdef __CUDACC__
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+#else
+      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+#endif
    }
 
    ///
@@ -1026,6 +1067,8 @@ namespace chai {
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> dynamic_pointer_cast(const managed_ptr<U>& other) noexcept {
       T* cpuPointer = dynamic_cast<T*>(other.get());
+
+#ifdef __CUDACC__
       T* gpuPointer = nullptr;
 
       if (cpuPointer) {
@@ -1034,6 +1077,9 @@ namespace chai {
       }
 
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+#else
+      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+#endif
    }
 
    ///
@@ -1047,9 +1093,17 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> const_pointer_cast(const managed_ptr<U>& other) noexcept {
+#ifdef __CUDACC__
       T* gpuPointer = detail::const_cast_on_device<T>(other);
+#endif
+
       T* cpuPointer = const_cast<T*>(other.get());
+
+#ifdef __CUDACC__
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+#else
+      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+#endif
    }
 
    ///
@@ -1063,9 +1117,17 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> reinterpret_pointer_cast(const managed_ptr<U>& other) noexcept {
+#ifdef __CUDACC__
       T* gpuPointer = detail::reinterpret_cast_on_device<T>(other);
+#endif
+
       T* cpuPointer = reinterpret_cast<T*>(other.get());
+
+#ifdef __CUDACC__
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
+#else
+      return managed_ptr<T>(other, {{CPU, cpuPointer}});
+#endif
    }
    
    /// Comparison operators
