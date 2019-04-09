@@ -5,7 +5,6 @@
 
 // Standard libary headers
 #include <cstddef>
-#include <functional>
 #include <tuple>
 
 namespace chai {
@@ -239,38 +238,36 @@ namespace chai {
 #endif
    }
 
-   struct managed_ptr_record {
-      managed_ptr_record() :
-         m_num_references(1),
-         m_callback()
-      {
-      }
+   class managed_ptr_record {
+      public:
+         managed_ptr_record() :
+            m_num_references(1),
+            m_callback()
+         {
+         }
 
-      managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*&)> callback) :
-         m_num_references(1),
-         m_callback(callback)
-      {
-      }
+         managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*&)> callback) :
+            m_num_references(1),
+            m_callback(callback)
+         {
+         }
 
-      size_t use_count() {
-         return m_num_references;
-      }
+         size_t use_count() {
+            return m_num_references;
+         }
 
-      void addReference() {
-         m_num_references++;
-      }
+         virtual void addReference() {
+            m_num_references++;
+         }
 
-      void removeReference() {
-         m_num_references--;
-      }
+         virtual void removeReference() {
+            m_num_references--;
+         }
 
-      ExecutionSpace getLastSpace() {
-         return m_last_space;
-      }
-
-      size_t m_num_references = 1; /// The reference counter
-      ExecutionSpace m_last_space = NONE; /// The last space executed in
-      std::function<bool(Action, ExecutionSpace, void*&)> m_callback; /// Callback to handle events
+      private:
+         size_t m_num_references = 1; /// The reference counter
+         ExecutionSpace m_last_space = NONE; /// The last space executed in
+         std::function<bool(Action, ExecutionSpace, void*&)> m_callback; /// Callback to handle events
    };
 
    ///
@@ -351,11 +348,9 @@ namespace chai {
                   case CPU:
                      m_cpu_pointer = pointer.second;
                      break;
-#ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointer.second;
                      break;
-#endif
                   default:
                      printf("Execution space not supported by chai::managed_ptr!");
                      break;
@@ -377,7 +372,7 @@ namespace chai {
                                std::function<bool(Action, ExecutionSpace, void*&)> callback) :
             m_cpu_pointer(nullptr),
             m_gpu_pointer(nullptr),
-            m_pointer_record(new managed_ptr_record(callback))
+            m_pointer_record(new managed_ptr_record<T>(callback))
          {
             static_assert(std::is_convertible<U*, T*>::value,
                           "U* must be convertible to T*.");
@@ -387,11 +382,9 @@ namespace chai {
                   case CPU:
                      m_cpu_pointer = pointer.second;
                      break;
-#ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointer.second;
                      break;
-#endif
                   default:
                      printf("Execution space not supported by chai::managed_ptr!");
                      break;
@@ -465,11 +458,9 @@ namespace chai {
                   case CPU:
                      m_cpu_pointer = pointer.second;
                      break;
-#ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointer.second;
                      break;
-#endif
                   default:
                      printf("Execution space not supported by chai::managed_ptr!");
                      break;
@@ -571,10 +562,8 @@ namespace chai {
             switch (space) {
                case CPU:
                   return m_cpu_pointer;
-#ifdef __CUDACC__
                case GPU:
                   return m_gpu_pointer;
-#endif
                default:
                   return nullptr;
             }
@@ -637,18 +626,17 @@ namespace chai {
          template <typename U>
          friend class managed_ptr; /// Needed for the converting constructor
 
-         CHAI_HOST void move() const {
+         CHAI_HOST void move() {
             if (m_pointer_record) {
                ExecutionSpace newSpace = ArrayManager::getInstance()->getExecutionSpace();
                
-               if (newSpace != NONE && newSpace != m_pointer_record->getLastSpace()) {
+               if (newSpace != NONE && newSpace != m_pointer_record->m_last_space) {
                   m_pointer_record->m_last_space = newSpace;
 
-                  for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
-                     ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
-                     void* pointer = static_cast<void*>(get(execSpace, false));
-
-                     m_pointer_record->m_callback(ACTION_MOVE, execSpace, pointer);
+                  for (int space = NONE, space < NUM_EXECUTION_SPACES; ++space) {
+                     m_pointer_record->m_callback(ACTION_MOVE,
+                                                  ExecutionSpace(space),
+                                                  get(space, false));
                   }
                }
             }
@@ -678,23 +666,17 @@ namespace chai {
 
                if (m_pointer_record->use_count() == 0) {
                   if (m_pointer_record->m_callback) {
-                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
-                        ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
-                        T* pointer = get(execSpace, false);
-                        void* voidPointer = static_cast<void*>(pointer);
-
+                     for (int space = NONE, space < NUM_EXECUTION_SPACES; ++space) {
                         if (!m_pointer_record->m_callback(ACTION_FREE,
-                                                          execSpace,
-                                                          voidPointer)) {
-                           switch (execSpace) {
+                                                          ExecutionSpace(space),
+                                                          get(space, false))) {
+                           switch (ExecutionSpace(space)) {
                               case CPU:
-                                 delete pointer;
+                                 delete get(space, false);
                                  break;
-#ifdef __CUDACC__
                               case GPU:
-                                 detail::destroy_on_device<<<1, 1>>>(pointer);
+                                 detail::destroy_on_device<<<1, 1>>>(get(space, false));
                                  break;
-#endif
                               default:
                                  break;
                            }
@@ -702,19 +684,14 @@ namespace chai {
                      }
                   }
                   else {
-                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
-                        ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
-                        T* pointer = get(execSpace, false);
-
-                        switch (execSpace) {
+                     for (int space = NONE, space < NUM_EXECUTION_SPACES; ++space) {
+                        switch (ExecutionSpace(space)) {
                            case CPU:
-                              delete pointer;
+                              delete get(space, false);
                               break;
-#ifdef __CUDACC__
                            case GPU:
-                              detail::destroy_on_device<<<1, 1>>>(pointer);
+                              detail::destroy_on_device<<<1, 1>>>(get(space, false));
                               break;
-#endif
                            default:
                               break;
                         }
@@ -767,7 +744,7 @@ namespace chai {
    }
 
    template <typename T>
-   std::tuple<> getManagedArguments(T) {
+   std::tuple<> getManagedArguments(T arg) {
       return std::tuple<>();
    }
 
@@ -796,7 +773,7 @@ namespace chai {
    struct make_index_sequence<0, I...> : public index_sequence<I...> {};
 
    template <typename T>
-   void doFreeManagedArrays(T) {}
+   void doFreeManagedArrays(T arg) {}
 
    template <typename T>
    void doFreeManagedArrays(ManagedArray<T> arg) {
@@ -818,7 +795,7 @@ namespace chai {
    }
 
    template <>
-   void freeManagedArrays(std::tuple<>&) {
+   void freeManagedArrays(std::tuple<>& args) {
       return;
    }
 
@@ -839,10 +816,7 @@ namespace chai {
 
       // Construct GPU and CPU pointers. Build the GPU pointer first so we can
       // take advantage of asynchrony.
-#ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device<T>(args...);
-#endif
-
       T* cpuPointer = new T(args...);
 
       // Get all the CHAI managed arguments so that we can build a callback that
@@ -852,7 +826,7 @@ namespace chai {
       // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
       // event.
       std::function<bool(Action, ExecutionSpace, void*&)> callback =
-         [=] (Action action, ExecutionSpace space, void*&) mutable -> bool {
+         [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
             switch (action) {
                case ACTION_MOVE:
                {
@@ -881,11 +855,7 @@ namespace chai {
             }
          };
 
-#ifdef __CUDACC__
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
-#else
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
-#endif
+      return managed_ptr<T>({{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
    }
 
    template <typename T>
@@ -918,10 +888,7 @@ namespace chai {
       // Construct GPU and CPU pointers. Build the GPU pointer first so we can
       // take advantage of asynchrony.
       // TODO: getRawPointers should be called on the device or with an execution space
-#ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device<T>(getRawPointers(args)...);
-#endif
-
       T* cpuPointer = new T(getRawPointers(args)...);
 
       // Get all the CHAI managed arguments so that we can build a callback that
@@ -930,7 +897,7 @@ namespace chai {
 
       // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
       // event.
-      auto callback = [=] (Action action, ExecutionSpace space, void*&) mutable -> bool {
+      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
          switch (action) {
             case ACTION_MOVE:
             {
@@ -959,11 +926,7 @@ namespace chai {
          }
       };
 
-#ifdef __CUDACC__
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
-#else
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
-#endif
+      return managed_ptr<T>({{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
    }
 
    ///
@@ -987,10 +950,7 @@ namespace chai {
       static_assert(std::is_convertible<R*, T*>::value,
                     "Factory function must return a type that is convertible to T*.");
 
-#ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device_from_factory<R>(f, args...);
-#endif
-
       T* cpuPointer = f(args...);
 
       auto managedArguments = getManagedArguments(args...);
@@ -1024,11 +984,7 @@ namespace chai {
          }
       };
 
-#ifdef __CUDACC__
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
-#else
-      return managed_ptr<T>(std::initializer_list<std::pair<ExecutionSpace, T*>>{{CPU, cpuPointer}}, callback);
-#endif
+      return managed_ptr<T>({{CPU, cpuPointer}, {GPU, gpuPointer}}, callback);
    }
 
    ///
@@ -1042,17 +998,9 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> static_pointer_cast(const managed_ptr<U>& other) noexcept {
-#ifdef __CUDACC__
       T* gpuPointer = detail::static_cast_on_device<T>(other);
-#endif
-
       T* cpuPointer = static_cast<T*>(other.get());
-
-#ifdef __CUDACC__
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
-#else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
-#endif
    }
 
    ///
@@ -1067,8 +1015,6 @@ namespace chai {
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> dynamic_pointer_cast(const managed_ptr<U>& other) noexcept {
       T* cpuPointer = dynamic_cast<T*>(other.get());
-
-#ifdef __CUDACC__
       T* gpuPointer = nullptr;
 
       if (cpuPointer) {
@@ -1077,9 +1023,6 @@ namespace chai {
       }
 
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
-#else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
-#endif
    }
 
    ///
@@ -1093,17 +1036,9 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> const_pointer_cast(const managed_ptr<U>& other) noexcept {
-#ifdef __CUDACC__
       T* gpuPointer = detail::const_cast_on_device<T>(other);
-#endif
-
       T* cpuPointer = const_cast<T*>(other.get());
-
-#ifdef __CUDACC__
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
-#else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
-#endif
    }
 
    ///
@@ -1117,17 +1052,9 @@ namespace chai {
    ///
    template <typename T, typename U>
    CHAI_HOST managed_ptr<T> reinterpret_pointer_cast(const managed_ptr<U>& other) noexcept {
-#ifdef __CUDACC__
       T* gpuPointer = detail::reinterpret_cast_on_device<T>(other);
-#endif
-
       T* cpuPointer = reinterpret_cast<T*>(other.get());
-
-#ifdef __CUDACC__
       return managed_ptr<T>(other, {{CPU, cpuPointer}, {GPU, gpuPointer}});
-#else
-      return managed_ptr<T>(other, {{CPU, cpuPointer}});
-#endif
    }
    
    /// Comparison operators
