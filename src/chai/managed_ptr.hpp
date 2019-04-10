@@ -9,233 +9,10 @@
 #include <tuple>
 
 namespace chai {
-   template <typename T>
-   class managed_ptr;
-
    namespace detail {
 #ifdef __CUDACC__
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Creates a new T on the device.
-      ///
-      /// @param[out] gpuPointer Used to return the device pointer to the new T
-      /// @param[in]  args The arguments to T's constructor
-      ///
-      /// @note Cannot capture argument packs in an extended device lambda,
-      ///       so explicit kernel is needed.
-      ///
-      template <typename T,
-                typename... Args>
-      __global__ void make_on_device(T*& gpuPointer, Args... args)
-      {
-         gpuPointer = new T(std::forward<Args>(args)...);
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Creates a new object on the device by calling the given factory method.
-      ///
-      /// @param[out] gpuPointer Used to return the device pointer to the new object
-      /// @param[in]  f The factory method (must be a __device__ or __host__ __device__
-      ///                method
-      /// @param[in]  args The arguments to the factory method
-      ///
-      /// @note Cannot capture argument packs in an extended device lambda,
-      ///       so explicit kernel is needed.
-      ///
-      template <typename T,
-                typename F,
-                typename... Args>
-      __global__ void make_on_device_from_factory(T*& gpuPointer, F f, Args... args)
-      {
-         gpuPointer = f(std::forward<Args>(args)...);
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Destroys the device pointer.
-      ///
-      /// @param[out] gpuPointer The device pointer to call delete on
-      ///
       template <typename T>
-      __global__ void destroy_on_device(T*& gpuPointer)
-      {
-         if (gpuPointer) {
-            delete gpuPointer;
-         }
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Gets the device pointer from the managed_ptr.
-      ///
-      /// @param[out] gpuPointer Used to return the device pointer
-      /// @param[in]  other The managed_ptr from which to extract the device pointer
-      ///
-      template <typename T>
-      __global__ void get_on_device(T*& gpuPointer,
-                                    const managed_ptr<T>& other)
-      {
-         gpuPointer = other.get();
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Converts the underlying pointer on the device using static_cast.
-      ///
-      /// @param[out] gpuPointer The device pointer that will contain the result of
-      ///                           calling static_cast on the pointer contained by
-      ///                           the given managed_ptr
-      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
-      ///                      convert using static_cast
-      ///
-      template <typename T, typename U>
-      __global__ void static_cast_on_device(T*& gpuPointer,
-                                            const managed_ptr<U>& other)
-      {
-         gpuPointer = static_cast<T*>(other.get());
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Converts the underlying pointer on the device using const_cast.
-      ///
-      /// @param[out] gpuPointer The device pointer that will contain the result of
-      ///                           calling const_cast on the pointer contained by
-      ///                           the given managed_ptr
-      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
-      ///                      convert using const_cast
-      ///
-      template <typename T, typename U>
-      __global__ void const_cast_on_device(T*& gpuPointer,
-                                           const managed_ptr<U>& other)
-      {
-         gpuPointer = const_cast<T*>(other.get());
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Converts the underlying pointer on the device using reinterpret_cast.
-      ///
-      /// @param[out] gpuPointer The device pointer that will contain the result of
-      ///                           calling reinterpret_cast on the pointer contained by
-      ///                           the given managed_ptr
-      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
-      ///                      convert using reinterpret_cast
-      ///
-      template <typename T, typename U>
-      __global__ void reinterpret_cast_on_device(T*& gpuPointer,
-                                                 const managed_ptr<U>& other)
-      {
-         gpuPointer = reinterpret_cast<T*>(other.get());
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Creates a new T on the device.
-      ///
-      /// @param[in]  args The arguments to T's constructor
-      ///
-      /// @return The device pointer to the new T
-      ///
-      template <typename T,
-                typename... Args>
-      CHAI_HOST T* make_on_device(Args&&... args) {
-         T* gpuPointer;
-         make_on_device<<<1, 1>>>(gpuPointer, args...);
-         cudaDeviceSynchronize();
-         return gpuPointer;
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Calls a factory method to create a new object on the device.
-      ///
-      /// @param[in]  f    The factory method
-      /// @param[in]  args The arguments to the factory method
-      ///
-      /// @return The device pointer to the new object
-      ///
-      template <typename T,
-                typename F,
-                typename... Args>
-      CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
-         T* gpuPointer;
-         make_on_device_from_factory<T><<<1, 1>>>(gpuPointer, f, args...);
-         cudaDeviceSynchronize();
-         return gpuPointer;
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Gets the device pointer from the managed_ptr.
-      ///
-      /// @param[in] other The managed_ptr from which to extract the device pointer
-      ///
-      template <typename T>
-      T* get_on_device(const managed_ptr<T>& other) {
-         T* gpuPointer;
-         get_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
-         return gpuPointer;
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Converts the underlying pointer on the device using static_cast.
-      ///
-      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
-      ///                      convert using static_cast
-      ///
-      template <typename T, typename U>
-      CHAI_HOST T* static_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* gpuPointer;
-         static_cast_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
-         return gpuPointer;
-      }
-
-      /// @author Alan Dayton
-      ///
-      /// Converts the underlying pointer on the device using const_cast.
-      ///
-      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
-      ///                      convert using const_cast
-      ///
-      template <typename T, typename U>
-      CHAI_HOST T* const_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* gpuPointer;
-         const_cast_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
-         return gpuPointer;
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Converts the underlying pointer on the device using reinterpret_cast.
-      ///
-      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
-      ///                      convert using reinterpret_cast
-      ///
-      template <typename T, typename U>
-      CHAI_HOST T* reinterpret_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* gpuPointer;
-         reinterpret_cast_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
-         return gpuPointer;
-      }
+      __global__ void destroy_on_device(T*& gpuPointer);
 #endif
    }
 
@@ -751,100 +528,329 @@ namespace chai {
          }
    };
 
-   template <typename, typename>
-   struct typelist_concatenate;
-
-   template <typename T, typename... Args>
-   struct typelist_concatenate<T, std::tuple<Args...>> {
-      using type = std::tuple<T, Args...>;
-   };
-
-   template <typename T, typename... Args>
-   using typelist_concatenate_t = typename typelist_concatenate<T, Args...>::type;
-
-   template <template <typename> class, typename...>
-   struct filter;
-
-   template <template <typename> class Predicate>
-   struct filter<Predicate> {
-      using type = std::tuple<>;
-   };
-
-   template <template <typename> class Predicate, typename T, typename... Args>
-   struct filter<Predicate, T, Args...> {
-      using type = typename std::conditional<Predicate<T>::value,
-                                             typelist_concatenate_t<T, typename filter<Predicate, Args...>::type>,
-                                             typename filter<Predicate, Args...>::type>::type;
-   };
-
-   template <template <typename> class Predicate, typename... Args>
-   using filter_t = typename filter<Predicate, Args...>::type;
-
-   template <typename T>
-   std::tuple<managed_ptr<T>> getManagedArguments(managed_ptr<T> arg) {
-      return std::forward_as_tuple(arg);
-   }
-
-   template <typename T>
-   std::tuple<ManagedArray<T>> getManagedArguments(ManagedArray<T> arg) {
-      return std::forward_as_tuple(arg);
-   }
-
-   template <typename T>
-   std::tuple<> getManagedArguments(T) {
-      return std::tuple<>();
-   }
-
-   template <typename>
-   struct IsManaged : std::false_type {};
-
-   template <typename T>
-   struct IsManaged<ManagedArray<T>> : std::true_type {};
-
-   template <typename T>
-   struct IsManaged<managed_ptr<T>> : std::true_type {};
-
-   template <typename T, typename... Args>
-   filter_t<IsManaged, T, Args...> getManagedArguments(T arg, Args... args) {
-      return std::tuple_cat(getManagedArguments(arg), getManagedArguments(args...));
-   }
-
-   // Taken from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
-   template <size_t ...I>
-   struct index_sequence {};
-
-   template <size_t N, size_t ...I>
-   struct make_index_sequence : public make_index_sequence<N - 1, N - 1, I...> {};
-
-   template <size_t ...I>
-   struct make_index_sequence<0, I...> : public index_sequence<I...> {};
-
-   template <typename T>
-   void doFreeManagedArrays(T) {}
-
-   template <typename T>
-   void doFreeManagedArrays(ManagedArray<T> arg) {
-      if (arg) {
-         arg.free();
+   namespace detail {
+#ifdef __CUDACC__
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new T on the device.
+      ///
+      /// @param[out] gpuPointer Used to return the device pointer to the new T
+      /// @param[in]  args The arguments to T's constructor
+      ///
+      /// @note Cannot capture argument packs in an extended device lambda,
+      ///       so explicit kernel is needed.
+      ///
+      template <typename T,
+                typename... Args>
+      __global__ void make_on_device(T*& gpuPointer, Args... args)
+      {
+         gpuPointer = new T(std::forward<Args>(args)...);
       }
-   }
 
-   // Adapted from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
-   template <typename ...T, size_t ...I>
-   void freeManagedArraysHelper(std::tuple<T...> &ts, index_sequence<I...>) {
-      //std::tie((doFreeManagedArrays(std::get<I>(ts)), 1) ... );
-      doFreeManagedArrays(std::get<I>(ts)...);
-   }
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new object on the device by calling the given factory method.
+      ///
+      /// @param[out] gpuPointer Used to return the device pointer to the new object
+      /// @param[in]  f The factory method (must be a __device__ or __host__ __device__
+      ///                method
+      /// @param[in]  args The arguments to the factory method
+      ///
+      /// @note Cannot capture argument packs in an extended device lambda,
+      ///       so explicit kernel is needed.
+      ///
+      template <typename T,
+                typename F,
+                typename... Args>
+      __global__ void make_on_device_from_factory(T*& gpuPointer, F f, Args... args)
+      {
+         gpuPointer = f(std::forward<Args>(args)...);
+      }
 
-   template <typename... Args>
-   void freeManagedArrays(std::tuple<Args...>& args) {
-      return freeManagedArraysHelper(args, make_index_sequence<sizeof...(Args)>());
-   }
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Destroys the device pointer.
+      ///
+      /// @param[out] gpuPointer The device pointer to call delete on
+      ///
+      template <typename T>
+      __global__ void destroy_on_device(T*& gpuPointer)
+      {
+         if (gpuPointer) {
+            delete gpuPointer;
+         }
+      }
 
-   template <>
-   void freeManagedArrays(std::tuple<>&) {
-      return;
-   }
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Gets the device pointer from the managed_ptr.
+      ///
+      /// @param[out] gpuPointer Used to return the device pointer
+      /// @param[in]  other The managed_ptr from which to extract the device pointer
+      ///
+      template <typename T>
+      __global__ void get_on_device(T*& gpuPointer,
+                                    const managed_ptr<T>& other)
+      {
+         gpuPointer = other.get();
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using static_cast.
+      ///
+      /// @param[out] gpuPointer The device pointer that will contain the result of
+      ///                           calling static_cast on the pointer contained by
+      ///                           the given managed_ptr
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using static_cast
+      ///
+      template <typename T, typename U>
+      __global__ void static_cast_on_device(T*& gpuPointer,
+                                            const managed_ptr<U>& other)
+      {
+         gpuPointer = static_cast<T*>(other.get());
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using const_cast.
+      ///
+      /// @param[out] gpuPointer The device pointer that will contain the result of
+      ///                           calling const_cast on the pointer contained by
+      ///                           the given managed_ptr
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using const_cast
+      ///
+      template <typename T, typename U>
+      __global__ void const_cast_on_device(T*& gpuPointer,
+                                           const managed_ptr<U>& other)
+      {
+         gpuPointer = const_cast<T*>(other.get());
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using reinterpret_cast.
+      ///
+      /// @param[out] gpuPointer The device pointer that will contain the result of
+      ///                           calling reinterpret_cast on the pointer contained by
+      ///                           the given managed_ptr
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using reinterpret_cast
+      ///
+      template <typename T, typename U>
+      __global__ void reinterpret_cast_on_device(T*& gpuPointer,
+                                                 const managed_ptr<U>& other)
+      {
+         gpuPointer = reinterpret_cast<T*>(other.get());
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new T on the device.
+      ///
+      /// @param[in]  args The arguments to T's constructor
+      ///
+      /// @return The device pointer to the new T
+      ///
+      template <typename T,
+                typename... Args>
+      CHAI_HOST T* make_on_device(Args&&... args) {
+         T* gpuPointer;
+         make_on_device<<<1, 1>>>(gpuPointer, args...);
+         cudaDeviceSynchronize();
+         return gpuPointer;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Calls a factory method to create a new object on the device.
+      ///
+      /// @param[in]  f    The factory method
+      /// @param[in]  args The arguments to the factory method
+      ///
+      /// @return The device pointer to the new object
+      ///
+      template <typename T,
+                typename F,
+                typename... Args>
+      CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
+         T* gpuPointer;
+         make_on_device_from_factory<T><<<1, 1>>>(gpuPointer, f, args...);
+         cudaDeviceSynchronize();
+         return gpuPointer;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Gets the device pointer from the managed_ptr.
+      ///
+      /// @param[in] other The managed_ptr from which to extract the device pointer
+      ///
+      template <typename T>
+      T* get_on_device(const managed_ptr<T>& other) {
+         T* gpuPointer;
+         get_on_device<<<1, 1>>>(gpuPointer, other);
+         cudaDeviceSynchronize();
+         return gpuPointer;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using static_cast.
+      ///
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using static_cast
+      ///
+      template <typename T, typename U>
+      CHAI_HOST T* static_cast_on_device(const managed_ptr<U>& other) noexcept {
+         T* gpuPointer;
+         static_cast_on_device<<<1, 1>>>(gpuPointer, other);
+         cudaDeviceSynchronize();
+         return gpuPointer;
+      }
+
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using const_cast.
+      ///
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using const_cast
+      ///
+      template <typename T, typename U>
+      CHAI_HOST T* const_cast_on_device(const managed_ptr<U>& other) noexcept {
+         T* gpuPointer;
+         const_cast_on_device<<<1, 1>>>(gpuPointer, other);
+         cudaDeviceSynchronize();
+         return gpuPointer;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Converts the underlying pointer on the device using reinterpret_cast.
+      ///
+      /// @param[in] other The managed_ptr to share ownership with and whose pointer to
+      ///                      convert using reinterpret_cast
+      ///
+      template <typename T, typename U>
+      CHAI_HOST T* reinterpret_cast_on_device(const managed_ptr<U>& other) noexcept {
+         T* gpuPointer;
+         reinterpret_cast_on_device<<<1, 1>>>(gpuPointer, other);
+         cudaDeviceSynchronize();
+         return gpuPointer;
+      }
+#endif
+
+      template <typename, typename>
+      struct typelist_concatenate;
+
+      template <typename T, typename... Args>
+      struct typelist_concatenate<T, std::tuple<Args...>> {
+         using type = std::tuple<T, Args...>;
+      };
+
+      template <typename T, typename... Args>
+      using typelist_concatenate_t = typename typelist_concatenate<T, Args...>::type;
+
+      template <template <typename> class, typename...>
+      struct filter;
+
+      template <template <typename> class Predicate>
+      struct filter<Predicate> {
+         using type = std::tuple<>;
+      };
+
+      template <template <typename> class Predicate, typename T, typename... Args>
+      struct filter<Predicate, T, Args...> {
+         using type = typename std::conditional<Predicate<T>::value,
+                                                typelist_concatenate_t<T, typename filter<Predicate, Args...>::type>,
+                                                typename filter<Predicate, Args...>::type>::type;
+      };
+
+      template <template <typename> class Predicate, typename... Args>
+      using filter_t = typename filter<Predicate, Args...>::type;
+
+      template <typename T>
+      std::tuple<managed_ptr<T>> getManagedArguments(managed_ptr<T> arg) {
+         return std::forward_as_tuple(arg);
+      }
+
+      template <typename T>
+      std::tuple<ManagedArray<T>> getManagedArguments(ManagedArray<T> arg) {
+         return std::forward_as_tuple(arg);
+      }
+
+      template <typename T>
+      std::tuple<> getManagedArguments(T) {
+         return std::tuple<>();
+      }
+
+      template <typename>
+      struct IsManaged : std::false_type {};
+
+      template <typename T>
+      struct IsManaged<ManagedArray<T>> : std::true_type {};
+
+      template <typename T>
+      struct IsManaged<managed_ptr<T>> : std::true_type {};
+
+      template <typename T, typename... Args>
+      filter_t<IsManaged, T, Args...> getManagedArguments(T arg, Args... args) {
+         return std::tuple_cat(getManagedArguments(arg), getManagedArguments(args...));
+      }
+
+      // Taken from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
+      template <size_t ...I>
+      struct index_sequence {};
+
+      template <size_t N, size_t ...I>
+      struct make_index_sequence : public make_index_sequence<N - 1, N - 1, I...> {};
+
+      template <size_t ...I>
+      struct make_index_sequence<0, I...> : public index_sequence<I...> {};
+
+      // Adapted from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
+      template <typename T>
+      void freeManagedArrays(T) {}
+
+      template <typename T>
+      void freeManagedArrays(ManagedArray<T> arg) {
+         if (arg) {
+            arg.free();
+         }
+      }
+
+      void freeManagedArrays() {}
+
+      template <typename T, typename... Args>
+      void freeManagedArrays(T head, Args... tail) {
+         freeManagedArrays(head);
+         freeManagedArrays(tail...);
+      }
+
+      template<typename... Args, size_t... I>
+      void freeManagedArrays(std::tuple<Args...>& t, index_sequence<I...>) {
+         freeManagedArrays(std::get<I>(t)...);
+      }
+
+      template <typename... Args>
+      void freeManagedArrays(std::tuple<Args...>& t) {
+         freeManagedArrays(t, make_index_sequence<sizeof...(Args)>());
+      }
+   } // namespace detail
 
    ///
    /// @author Alan Dayton
@@ -871,7 +877,7 @@ namespace chai {
 
       // Get all the CHAI managed arguments so that we can build a callback that
       // triggers memory transfers.
-      auto managedArguments = getManagedArguments(std::forward<Args>(args)...);
+      auto managedArguments = detail::getManagedArguments(std::forward<Args>(args)...);
 
       // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
       // event.
@@ -889,7 +895,7 @@ namespace chai {
                   switch (space) {
                      case NONE:
                      {
-                        freeManagedArrays(managedArguments);
+                        detail::freeManagedArrays(managedArguments);
                         return true;
                      }
                      default:
@@ -950,7 +956,7 @@ namespace chai {
 
       // Get all the CHAI managed arguments so that we can build a callback that
       // triggers memory transfers.
-      auto managedArguments = getManagedArguments(args...);
+      auto managedArguments = detail::getManagedArguments(args...);
 
       // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
       // event.
@@ -967,7 +973,7 @@ namespace chai {
                switch (space) {
                   case NONE:
                   {
-                     freeManagedArrays(managedArguments);
+                     detail::freeManagedArrays(managedArguments);
                      return true;
                   }
                   default:
@@ -1017,7 +1023,7 @@ namespace chai {
 
       T* cpuPointer = f(args...);
 
-      auto managedArguments = getManagedArguments(args...);
+      auto managedArguments = detail::getManagedArguments(args...);
 
       auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
          switch (action) {
@@ -1032,7 +1038,7 @@ namespace chai {
                switch (space) {
                   case NONE:
                   {
-                     freeManagedArrays(managedArguments);
+                     detail::freeManagedArrays(managedArguments);
                      return true;
                   }
                   default:

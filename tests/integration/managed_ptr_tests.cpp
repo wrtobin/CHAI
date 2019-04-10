@@ -125,12 +125,37 @@ class TestContainer {
 
       CHAI_HOST_DEVICE ~TestContainer() {}
 
-      CHAI_HOST_DEVICE virtual int getValue() const {
+      CHAI_HOST_DEVICE int getValue() const {
          return m_innerType->getValue();
       }
 
    private:
       chai::managed_ptr<TestInner> m_innerType;
+};
+
+class MultipleRawArrayClass {
+   public:
+      CHAI_HOST_DEVICE MultipleRawArrayClass() : m_values1(nullptr), m_values2(nullptr) {}
+      CHAI_HOST_DEVICE MultipleRawArrayClass(int* values1, int* values2) :
+         m_values1(values1),
+         m_values2(values2)
+      {}
+
+      CHAI_HOST_DEVICE int getValue(const int i, const int j) const {
+         if (i == 0) {
+            return m_values1[j];
+         }
+         else if (i == 1) {
+            return m_values2[j];
+         }
+         else {
+            return -1;
+         }
+      }
+
+   private:
+      int* m_values1;
+      int* m_values2;
 };
 
 TEST(managed_ptr, class_with_raw_array)
@@ -142,6 +167,22 @@ TEST(managed_ptr, class_with_raw_array)
 
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
   ASSERT_EQ(rawArrayClass->getValue(0), expectedValue);
+}
+
+TEST(managed_ptr, class_with_multiple_raw_arrays)
+{
+  const int expectedValue1 = rand();
+  const int expectedValue2 = rand();
+
+  chai::ManagedArray<int> array1(1, chai::CPU);
+  chai::ManagedArray<int> array2(1, chai::CPU);
+
+  array1[0] = expectedValue1;
+  array2[0] = expectedValue2;
+
+  auto multipleRawArrayClass = chai::make_managed<MultipleRawArrayClass>(array1, array2);
+  ASSERT_EQ(multipleRawArrayClass->getValue(0, 0), expectedValue1);
+  ASSERT_EQ(multipleRawArrayClass->getValue(1, 0), expectedValue2);
 }
 
 TEST(managed_ptr, class_with_managed_array)
