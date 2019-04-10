@@ -671,6 +671,7 @@ TEST(ManagedArray, ImplicitConversions)
   chai::ManagedArray<float> a(10);
 
   chai::ManagedArray<float> a2 = a;
+  (void)a2;
 
   SUCCEED();
 }
@@ -1292,6 +1293,8 @@ CUDA_TEST(ManagedArray, DeviceDeepCopy)
 #endif
 #endif  // defined(CHAI_ENABLE_CUDA)
 
+#ifdef CHAI_ENABLE_CUDA
+
 CUDA_TEST(ManagedArray, CopyConstruct)
 {
   const int expectedValue = rand();
@@ -1310,4 +1313,6 @@ CUDA_TEST(ManagedArray, CopyConstruct)
   results.move(chai::CPU);
   ASSERT_EQ(results[0], expectedValue);
 }
+
+#endif
 
