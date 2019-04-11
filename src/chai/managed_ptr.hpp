@@ -484,6 +484,9 @@ namespace chai {
                         T* pointer = get(execSpace, false);
 
                         using T_non_const = typename std::remove_const<T>::type;
+
+                        // We can use const_cast because can managed_ptr can only
+                        // be constructed with non const pointers.
                         T_non_const* temp = const_cast<T_non_const*>(pointer);
 
                         void* voidPointer = static_cast<void*>(temp);
