@@ -761,6 +761,23 @@ namespace chai {
       }
 #endif
 
+      // Adapted from "The C++ Programming Language," Fourth Edition, by Bjarne Stroustrup
+      template <typename T>
+      struct managed_to_raw {
+         private:
+            template <typename U>
+            static U* check(managed_ptr<U> const &);
+
+            template <typename U>
+            static U* check(ManagedArray<U> const &);
+
+            template <typename U>
+            static T check(U const &);
+         public:
+            using type = decltype(check(std::declval<T>()));
+      };
+
+      // Taken from https://stackoverflow.com/questions/18366398/filter-the-types-of-a-parameter-pack
       template <typename, typename>
       struct typelist_concatenate;
 
@@ -872,7 +889,7 @@ namespace chai {
              typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
    CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
       static_assert(std::is_constructible<T, Args...>::value,
-                    "Type T must be constructible with the given arguments.");
+                    "T is not constructible with the given arguments.");
 
       // Construct GPU and CPU pointers. Build the GPU pointer first so we can
       // take advantage of asynchrony.
@@ -952,6 +969,9 @@ namespace chai {
              typename... Args,
              typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
    CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
+      static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
+                    "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
+
       // Construct GPU and CPU pointers. Build the GPU pointer first so we can
       // take advantage of asynchrony.
       // TODO: getRawPointers should be called on the device or with an execution space

@@ -329,3 +329,37 @@ CUDA_TEST(managed_ptr, cuda_nested_managed_ptr)
 
 #endif
 
+#if 0 // These test that proper compiler errors are given since otherwise it is
+      // difficult to make sure the template metaprogramming is correct.
+
+class RawArrayOfPointersClass {
+   public:
+      CHAI_HOST_DEVICE RawArrayOfPointersClass() = delete;
+      CHAI_HOST_DEVICE RawArrayOfPointersClass(RawArrayClass** arrayOfPointers) :
+         m_arrayOfPointers(arrayOfPointers)
+      {}
+
+      CHAI_HOST_DEVICE int getValue(const int i, const int j) const {
+         return m_arrayOfPointers[i]->getValue(j);
+      }
+
+   private:
+      RawArrayClass** m_arrayOfPointers = nullptr;
+};
+
+TEST(managed_ptr, class_with_raw_array_of_pointers)
+{
+  const int expectedValue = rand();
+
+  chai::ManagedArray<int> array(1, chai::CPU);
+  array[0] = expectedValue;
+
+  auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
+  chai::managed_ptr<RawArrayClass> arrayOfPointers[1] = {rawArrayClass};
+
+  auto rawArrayOfPointersClass = chai::make_managed<RawArrayOfPointersClass>(arrayOfPointers);
+  ASSERT_EQ(rawArrayOfPointersClass->getValue(0, 0), expectedValue);
+}
+
+#endif
+
