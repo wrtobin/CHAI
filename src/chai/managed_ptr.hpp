@@ -482,7 +482,11 @@ namespace chai {
                      for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
                         ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
                         T* pointer = get(execSpace, false);
-                        void* voidPointer = static_cast<void*>(pointer);
+
+                        using T_non_const = typename std::remove_const<T>::type;
+                        T_non_const* temp = const_cast<T_non_const*>(pointer);
+
+                        void* voidPointer = static_cast<void*>(temp);
 
                         if (!m_pointer_record->m_callback(ACTION_FREE,
                                                           execSpace,
