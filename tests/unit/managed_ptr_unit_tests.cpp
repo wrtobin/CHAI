@@ -130,6 +130,22 @@ TEST(managed_ptr, nullptr_constructor)
   EXPECT_FALSE(otherDerived != derived);
 }
 
+TEST(managed_ptr, cpu_pointer_constructor)
+{
+  TestDerived* cpuPointer = new TestDerived(3);
+  chai::managed_ptr<TestDerived> derived({chai::CPU}, {cpuPointer});
+
+  EXPECT_EQ(derived->getValue(), 3);
+
+  EXPECT_NE(derived.get(), nullptr);
+  EXPECT_EQ(derived.use_count(), 1);
+  EXPECT_TRUE(derived);
+  EXPECT_FALSE(derived == nullptr);
+  EXPECT_FALSE(nullptr == derived);
+  EXPECT_TRUE(derived != nullptr);
+  EXPECT_TRUE(nullptr != derived);
+}
+
 TEST(managed_ptr, make_managed)
 {
   const int expectedValue = rand();
@@ -443,6 +459,89 @@ CUDA_TEST(managed_ptr, cuda_nullptr_constructor)
   EXPECT_TRUE(array2[6]);
   EXPECT_FALSE(array2[7]);
   EXPECT_FALSE(array2[8]);
+}
+
+CUDA_TEST(managed_ptr, cuda_gpu_pointer_constructor)
+{
+  TestDerived* gpuPointer = chai::detail::make_on_device<TestDerived>(3);
+  chai::managed_ptr<TestDerived> derived({chai::GPU}, {gpuPointer});
+
+  EXPECT_EQ(derived.get(), nullptr);
+  EXPECT_EQ(derived.use_count(), 1);
+  EXPECT_FALSE(derived);
+  EXPECT_TRUE(derived == nullptr);
+  EXPECT_TRUE(nullptr == derived);
+  EXPECT_FALSE(derived != nullptr);
+  EXPECT_FALSE(nullptr != derived);
+
+  chai::ManagedArray<int> array1(1, chai::GPU);
+  chai::ManagedArray<TestDerived*> array2(1, chai::GPU);
+  chai::ManagedArray<bool> array3(5, chai::GPU);
+
+  forall(cuda(), 0, 1, [=] __device__ (int i) {
+    array1[i] = derived->getValue();
+    array2[i] = derived.get();
+    array3[0] = (bool) derived;
+    array3[1] = derived == nullptr;
+    array3[2] = nullptr == derived;
+    array3[3] = derived != nullptr;
+    array3[4] = nullptr != derived;
+  });
+
+  array1.move(chai::CPU);
+  array2.move(chai::CPU);
+  array3.move(chai::CPU);
+
+  EXPECT_EQ(array1[0], 3);
+  EXPECT_NE(array2[0], nullptr);
+  EXPECT_TRUE(array3[0]);
+  EXPECT_FALSE(array3[1]);
+  EXPECT_FALSE(array3[2]);
+  EXPECT_TRUE(array3[3]);
+  EXPECT_TRUE(array3[4]);
+}
+
+CUDA_TEST(managed_ptr, cuda_cpu_and_gpu_pointer_constructor)
+{
+  TestDerived* gpuPointer = chai::detail::make_on_device<TestDerived>(3);
+  TestDerived* cpuPointer = new TestDerived(4);
+
+  chai::managed_ptr<TestDerived> derived({chai::GPU, chai::CPU}, {gpuPointer, cpuPointer});
+
+  EXPECT_EQ(derived->getValue(), 4);
+  EXPECT_NE(derived.get(), nullptr);
+  EXPECT_EQ(derived.use_count(), 1);
+  EXPECT_TRUE(derived);
+  EXPECT_FALSE(derived == nullptr);
+  EXPECT_FALSE(nullptr == derived);
+  EXPECT_TRUE(derived != nullptr);
+  EXPECT_TRUE(nullptr != derived);
+
+  chai::ManagedArray<int> array1(1, chai::GPU);
+  chai::ManagedArray<TestDerived*> array2(1, chai::GPU);
+  chai::ManagedArray<bool> array3(5, chai::GPU);
+
+  forall(cuda(), 0, 1, [=] __device__ (int i) {
+    array1[i] = derived->getValue();
+    array2[i] = derived.get();
+    array3[0] = (bool) derived;
+    array3[1] = derived == nullptr;
+    array3[2] = nullptr == derived;
+    array3[3] = derived != nullptr;
+    array3[4] = nullptr != derived;
+  });
+
+  array1.move(chai::CPU);
+  array2.move(chai::CPU);
+  array3.move(chai::CPU);
+
+  EXPECT_EQ(array1[0], 3);
+  EXPECT_NE(array2[0], nullptr);
+  EXPECT_TRUE(array3[0]);
+  EXPECT_FALSE(array3[1]);
+  EXPECT_FALSE(array3[2]);
+  EXPECT_TRUE(array3[3]);
+  EXPECT_TRUE(array3[4]);
 }
 
 CUDA_TEST(managed_ptr, cuda_make_managed)

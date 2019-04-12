@@ -445,20 +445,22 @@ namespace chai {
                if (newSpace != NONE && newSpace != m_pointer_record->getLastSpace()) {
                   m_pointer_record->m_last_space = newSpace;
 
-                  for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
-                     ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
+                  if (m_pointer_record->m_callback) {
+                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
+                        ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
 
-                     T* pointer = get(execSpace, false);
+                        T* pointer = get(execSpace, false);
 
-                     using T_non_const = typename std::remove_const<T>::type;
+                        using T_non_const = typename std::remove_const<T>::type;
 
-                     // We can use const_cast because can managed_ptr can only
-                     // be constructed with non const pointers.
-                     T_non_const* temp = const_cast<T_non_const*>(pointer);
+                        // We can use const_cast because can managed_ptr can only
+                        // be constructed with non const pointers.
+                        T_non_const* temp = const_cast<T_non_const*>(pointer);
 
-                     void* voidPointer = static_cast<void*>(temp);
+                        void* voidPointer = static_cast<void*>(temp);
 
-                     m_pointer_record->m_callback(ACTION_MOVE, execSpace, voidPointer);
+                        m_pointer_record->m_callback(ACTION_MOVE, execSpace, voidPointer);
+                     }
                   }
                }
             }
