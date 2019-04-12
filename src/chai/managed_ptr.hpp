@@ -866,8 +866,6 @@ namespace chai {
          }
       }
 
-      void freeManagedArrays() {}
-
       template <typename T, typename... Args>
       void freeManagedArrays(T head, Args... tail) {
          freeManagedArrays(head);
