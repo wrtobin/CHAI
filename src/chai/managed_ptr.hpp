@@ -883,6 +883,29 @@ namespace chai {
       void freeManagedArrays(std::tuple<Args...>& t) {
          freeManagedArrays(t, make_index_sequence<sizeof...(Args)>());
       }
+
+      // Adapted from "The C++ Programming Language," Fourth Edition,
+      // by Bjarne Stroustrup, pp. 814-816
+      struct substitution_failure {};
+
+      template <typename T>
+      struct substitution_succeeded : std::true_type {};
+
+      template<>
+      struct substitution_succeeded<substitution_failure> : std::false_type {};
+
+      template <typename F, typename... Args>
+      struct is_invocable_impl {
+         private:
+            template <typename X, typename... Ts>
+            static auto check(X const& x, Ts&&... ts) -> decltype(x(ts...));
+            static substitution_failure check(...);
+         public:
+            using type = decltype(check(std::declval<F>(), std::declval<Args>()...));
+      };
+
+      template <typename F, typename... Args>
+      struct is_invocable : substitution_succeeded<typename is_invocable_impl<F, Args...>::type> {};
    } // namespace detail
 
    ///
@@ -1045,13 +1068,16 @@ namespace chai {
              typename F,
              typename... Args>
    CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args&&... args) {
+      static_assert(detail::is_invocable<F, Args...>::value,
+                    "F is not invocable with the given arguments.");
+
       static_assert(std::is_pointer<typename std::result_of<F(Args...)>::type>::value,
-                    "Factory function must return a pointer");
+                    "F does not return a pointer.");
 
       using R = typename std::remove_pointer<typename std::result_of<F(Args...)>::type>::type;
 
       static_assert(std::is_convertible<R*, T*>::value,
-                    "Factory function must return a type that is convertible to T*.");
+                    "F does not return a pointer that is convertible to T*.");
 
 #ifdef __CUDACC__
       T* gpuPointer = detail::make_on_device_from_factory<R>(f, args...);

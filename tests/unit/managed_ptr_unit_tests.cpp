@@ -839,3 +839,47 @@ CUDA_TEST(managed_ptr, cuda_copy_assignment_operator)
 
 #endif
 
+// Enable the following tests to ensure that proper compiler errors are given
+// for bad arguments since otherwise it is difficult to make sure the template
+// metaprogramming is correct.
+
+#if 0
+
+// Should give something like the following:
+// error: static assertion failed: F is not invocable with the given arguments.
+
+TEST(managed_ptr, bad_function_to_make_managed_from_factory_function)
+{
+  const int expectedValue = rand();
+
+  auto factory = [] CHAI_HOST (const int value) {
+    return new TestDerived(value);
+  };
+
+  auto derived = chai::make_managed_from_factory<TestBase>(expectedValue, factory);
+
+  EXPECT_EQ((*derived).getValue(), expectedValue);
+}
+
+#endif
+
+#if 0
+
+// Should give something like the following:
+// error: static assertion failed: F is not invocable with the given arguments.
+
+TEST(managed_ptr, bad_arguments_to_make_managed_from_factory_function)
+{
+  const int expectedValue = rand();
+
+  auto factory = [] CHAI_HOST (const int value) {
+    return new TestDerived(value);
+  };
+
+  auto derived = chai::make_managed_from_factory<TestBase>(factory, expectedValue, 3);
+
+  EXPECT_EQ((*derived).getValue(), expectedValue);
+}
+
+#endif
+
