@@ -45,6 +45,10 @@ namespace chai {
          return m_last_space;
       }
 
+      void set_callback(std::function<bool(Action, ExecutionSpace, void*&)> callback) {
+         m_callback = callback;
+      }
+
       size_t m_num_references = 1; /// The reference counter
       ExecutionSpace m_last_space = NONE; /// The last space executed in
       std::function<bool(Action, ExecutionSpace, void*&)> m_callback; /// Callback to handle events
@@ -428,6 +432,26 @@ namespace chai {
          ///
          CHAI_HOST_DEVICE inline explicit operator bool() const noexcept {
             return get() != nullptr;
+         }
+
+         ///
+         /// @author Alan Dayton
+         ///
+         /// Sets the callback, which can be used to handle specific actions.
+         /// ACTION_MOVE can be used to call the copy constructor for ManagedArrays.
+         /// ACTION_FREE can be used to provide a custom deleter operation. Use
+         ///    ExecutionSpace::NONE if freeing anything other than the actual object
+         ///    pointers.
+         ///
+         /// @param[in] callback The callback to call when certain actions occur
+         ///
+         CHAI_HOST void set_callback(std::function<bool(Action, ExecutionSpace, void*&)> callback) {
+            if (m_pointer_record) {
+               m_pointer_record->set_callback(callback);
+            }
+            else {
+               printf("[CHAI] WARNING: No callback is allowed for managed_ptr that does not contain a valid pointer (i.e. the default or nullptr constructor was used)!\n");
+            }
          }
 
       private:
