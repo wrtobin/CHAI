@@ -126,7 +126,7 @@ namespace chai {
 
             // TODO: In c++14 convert to a static_assert
             if (spaces.size() != pointers.size()) {
-               printf("WARNING: The number of spaces is different than the number of pointers given.");
+               printf("[CHAI] WARNING: The number of spaces is different than the number of pointers given!\n");
             }
 
             int i = 0;
@@ -142,7 +142,7 @@ namespace chai {
                      break;
 #endif
                   default:
-                     printf("Execution space not supported by chai::managed_ptr!");
+                     printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
                      break;
                }
             }
@@ -170,7 +170,7 @@ namespace chai {
 
             // TODO: In c++14 convert to a static_assert
             if (spaces.size() != pointers.size()) {
-               printf("WARNING: The number of spaces is different than the number of pointers given.");
+               printf("[CHAI] WARNING: The number of spaces is different than the number of pointers given.\n");
             }
 
             int i = 0;
@@ -186,7 +186,7 @@ namespace chai {
                      break;
 #endif
                   default:
-                     printf("Execution space not supported by chai::managed_ptr!");
+                     printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
                      break;
                }
             }
@@ -256,7 +256,7 @@ namespace chai {
          {
             // TODO: In c++14 convert to a static_assert
             if (spaces.size() != pointers.size()) {
-               printf("WARNING: The number of spaces is different than the number of pointers given.");
+               printf("[CHAI] WARNING: The number of spaces is different than the number of pointers given.\n");
             }
 
             int i = 0;
@@ -272,7 +272,7 @@ namespace chai {
                      break;
 #endif
                   default:
-                     printf("Execution space not supported by chai::managed_ptr!");
+                     printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
                      break;
                }
             }
@@ -923,54 +923,28 @@ namespace chai {
       static_assert(std::is_constructible<T, Args...>::value,
                     "T is not constructible with the given arguments.");
 
-      // Construct GPU and CPU pointers. Build the GPU pointer first so we can
-      // take advantage of asynchrony.
+      // Get the ArrayManager and save the current execution space
+      chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+      ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
 #ifdef __CUDACC__
+      // Construct on the GPU first to take advantage of asynchrony
+      arrayManager->setExecutionSpace(GPU);
       T* gpuPointer = detail::make_on_device<T>(args...);
 #endif
 
-      T* cpuPointer = new T(args...);
+      // Construct on the CPU
+      arrayManager->setExecutionSpace(CPU);
+      T* cpuPointer = new T(std::forward<Args>(args)...);
 
-      // Get all the CHAI managed arguments so that we can build a callback that
-      // triggers memory transfers.
-      auto managedArguments = detail::getManagedArguments(std::forward<Args>(args)...);
+      // Reset the execution space
+      arrayManager->setExecutionSpace(currentSpace);
 
-      // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
-      // event.
-      std::function<bool(Action, ExecutionSpace, void*&)> callback =
-         [=] (Action action, ExecutionSpace space, void*&) mutable -> bool {
-            switch (action) {
-               case ACTION_MOVE:
-               {
-                  auto temp = managedArguments;
-                  (void)temp;
-                  return true;
-               }
-               case ACTION_FREE:
-               {
-                  switch (space) {
-                     case NONE:
-                     {
-                        detail::freeManagedArrays(managedArguments);
-                        return true;
-                     }
-                     default:
-                     {
-                        return false;
-                     }
-                  }
-               }
-               default:
-               {
-                  return false;
-               }
-            }
-         };
-
+      // Construct and return the managed_ptr
 #ifdef __CUDACC__
-      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, callback);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>({CPU}, {cpuPointer}, callback);
+      return managed_ptr<T>({CPU}, {cpuPointer});
 #endif
    }
 
@@ -1004,54 +978,29 @@ namespace chai {
       static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
                     "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
 
-      // Construct GPU and CPU pointers. Build the GPU pointer first so we can
-      // take advantage of asynchrony.
-      // TODO: getRawPointers should be called on the device or with an execution space
+      // Get the ArrayManager and save the current execution space
+      chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+      ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
 #ifdef __CUDACC__
+      // TODO: getRawPointers should be called on the device or with an execution space
+      // Construct on the GPU first to take advantage of asynchrony
+      arrayManager->setExecutionSpace(GPU);
       T* gpuPointer = detail::make_on_device<T>(getRawPointers(args)...);
 #endif
 
-      T* cpuPointer = new T(getRawPointers(args)...);
+      // Construct on the CPU
+      arrayManager->setExecutionSpace(CPU);
+      T* cpuPointer = new T(getRawPointers(std::forward<Args>(args))...);
 
-      // Get all the CHAI managed arguments so that we can build a callback that
-      // triggers memory transfers.
-      auto managedArguments = detail::getManagedArguments(args...);
+      // Reset the execution space
+      arrayManager->setExecutionSpace(currentSpace);
 
-      // Build a callback to handle the ACTION_MOVE event and partially the ACTION_FREE
-      // event.
-      auto callback = [=] (Action action, ExecutionSpace space, void*&) mutable -> bool {
-         switch (action) {
-            case ACTION_MOVE:
-            {
-               auto temp = managedArguments;
-               (void)temp;
-               return true;
-            }
-            case ACTION_FREE:
-            {
-               switch (space) {
-                  case NONE:
-                  {
-                     detail::freeManagedArrays(managedArguments);
-                     return true;
-                  }
-                  default:
-                  {
-                     return false;
-                  }
-               }
-            }
-            default:
-            {
-               return false;
-            }
-         }
-      };
-
+      // Construct and return the managed_ptr
 #ifdef __CUDACC__
-      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, callback);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>({CPU}, {cpuPointer}, callback);
+      return managed_ptr<T>({CPU}, {cpuPointer});
 #endif
    }
 
@@ -1079,47 +1028,27 @@ namespace chai {
       static_assert(std::is_convertible<R*, T*>::value,
                     "F does not return a pointer that is convertible to T*.");
 
+      // Get the ArrayManager and save the current execution space
+      chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+      ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
 #ifdef __CUDACC__
+      // Construct on the GPU first to take advantage of asynchrony
+      arrayManager->setExecutionSpace(GPU);
       T* gpuPointer = detail::make_on_device_from_factory<R>(f, args...);
 #endif
 
-      T* cpuPointer = f(args...);
+      // Construct on the CPU
+      T* cpuPointer = f(std::forward<Args>(args)...);
 
-      auto managedArguments = detail::getManagedArguments(args...);
+      // Reset the execution space
+      arrayManager->setExecutionSpace(currentSpace);
 
-      auto callback = [=] (Action action, ExecutionSpace space, void*& pointer) mutable -> bool {
-         switch (action) {
-            case ACTION_MOVE:
-            {
-               auto temp = managedArguments;
-               (void)temp;
-               return true;
-            }
-            case ACTION_FREE:
-            {
-               switch (space) {
-                  case NONE:
-                  {
-                     detail::freeManagedArrays(managedArguments);
-                     return true;
-                  }
-                  default:
-                  {
-                     return false;
-                  }
-               }
-            }
-            default:
-            {
-               return false;
-            }
-         }
-      };
-
+      // Construct and return the managed_ptr
 #ifdef __CUDACC__
-      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, callback);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>({CPU}, {cpuPointer}, callback);
+      return managed_ptr<T>({CPU}, {cpuPointer});
 #endif
    }
 
@@ -1164,8 +1093,7 @@ namespace chai {
       T* gpuPointer = nullptr;
 
       if (cpuPointer) {
-         gpuPointer = detail::static_cast_on_device<T>(other);
-         printf("WARNING! CUDA does not support dynamic_cast. Using static_cast instead.");
+         gpuPointer = detail::reinterpret_cast_on_device<T>(other);
       }
 
       return managed_ptr<T>(other, {CPU, GPU}, {cpuPointer, gpuPointer});
