@@ -163,9 +163,13 @@ TEST(managed_ptr, class_with_raw_array)
   const int expectedValue = rand();
 
   chai::ManagedArray<int> array(1, chai::CPU);
-  array[0] = expectedValue;
+
+  forall(sequential(), 0, 1, [=] (int i) {
+    array[i] = expectedValue;
+  });
 
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
+
   ASSERT_EQ(rawArrayClass->getValue(0), expectedValue);
 }
 
@@ -177,10 +181,13 @@ TEST(managed_ptr, class_with_multiple_raw_arrays)
   chai::ManagedArray<int> array1(1, chai::CPU);
   chai::ManagedArray<int> array2(1, chai::CPU);
 
-  array1[0] = expectedValue1;
-  array2[0] = expectedValue2;
+  forall(sequential(), 0, 1, [=] (int i) {
+     array1[i] = expectedValue1;
+     array2[i] = expectedValue2;
+  });
 
   auto multipleRawArrayClass = chai::make_managed<MultipleRawArrayClass>(array1, array2);
+
   ASSERT_EQ(multipleRawArrayClass->getValue(0, 0), expectedValue1);
   ASSERT_EQ(multipleRawArrayClass->getValue(1, 0), expectedValue2);
 }
@@ -190,9 +197,13 @@ TEST(managed_ptr, class_with_managed_array)
   const int expectedValue = rand();
 
   chai::ManagedArray<int> array(1, chai::CPU);
-  array[0] = expectedValue;
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[i] = expectedValue;
+  });
 
   auto derived = chai::make_managed<TestDerived>(array);
+
   ASSERT_EQ(derived->getValue(0), expectedValue);
 }
 
@@ -201,7 +212,10 @@ TEST(managed_ptr, class_with_raw_ptr)
   const int expectedValue = rand();
 
   chai::ManagedArray<int> array(1, chai::CPU);
-  array[0] = expectedValue;
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[i] = expectedValue;
+  });
 
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
   auto rawPointerClass = chai::make_managed<RawPointerClass>(rawArrayClass);
@@ -236,7 +250,10 @@ CUDA_TEST(managed_ptr, cuda_class_with_raw_array)
   const int expectedValue = rand();
 
   chai::ManagedArray<int> array(1, chai::CPU);
-  array[0] = expectedValue;
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[i] = expectedValue;
+  });
 
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
   chai::ManagedArray<int> results(1, chai::GPU);
@@ -254,7 +271,10 @@ CUDA_TEST(managed_ptr, cuda_class_with_managed_array)
   const int expectedValue = rand();
 
   chai::ManagedArray<int> array(1, chai::CPU);
-  array[0] = expectedValue;
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[0] = expectedValue;
+  });
 
   chai::managed_ptr<TestBase> derived = chai::make_managed<TestDerived>(array);
   auto derived2 = chai::static_pointer_cast<TestDerived>(derived);
@@ -278,7 +298,10 @@ CUDA_TEST(managed_ptr, cuda_class_with_raw_ptr)
   const int expectedValue = rand();
 
   chai::ManagedArray<int> array(1, chai::CPU);
-  array[0] = expectedValue;
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[0] = expectedValue;
+  });
 
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
   auto rawPointerClass = chai::make_managed<RawPointerClass>(rawArrayClass);
