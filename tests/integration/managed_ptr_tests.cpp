@@ -269,6 +269,64 @@ TEST(managed_ptr, nested_managed_ptr)
 
 #ifdef __CUDACC__
 
+template <typename T>
+__global__ void deviceNew(T** arr) {
+   *arr = new T[5];
+}
+
+template <typename T>
+__global__ void deviceDelete(T** arr) {
+   delete[] *arr;
+}
+
+__global__ void passObjectToKernel(chai::ManagedArray<int> arr) {
+   arr[0] = -1;
+}
+
+CUDA_TEST(managed_ptr, make_on_device)
+{
+  int** hostArray = (int**) malloc(sizeof(int*));
+  hostArray[0] = nullptr;
+
+  int** deviceArray = nullptr;
+  cudaMalloc(&deviceArray, sizeof(int*));
+
+  int** deviceArray2 = nullptr;
+  cudaMalloc(&deviceArray2, sizeof(int*));
+
+  deviceNew<<<1, 1>>>(deviceArray);
+
+  cudaMemcpy(hostArray, deviceArray, sizeof(int*), cudaMemcpyDeviceToHost);
+  cudaDeviceSynchronize();
+  cudaMemcpy(deviceArray2, hostArray, sizeof(int*), cudaMemcpyHostToDevice);
+  ASSERT_NE(hostArray[0], nullptr);
+
+  deviceDelete<<<1, 1>>>(deviceArray2);
+  cudaDeviceSynchronize();
+  free(hostArray);
+  cudaFree(deviceArray);
+  cudaFree(deviceArray2);
+}
+
+CUDA_TEST(managed_ptr, pass_object_to_kernel)
+{
+  const int expectedValue = rand();
+
+  chai::ManagedArray<int> array(1, chai::CPU);
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[i] = expectedValue;
+  });
+
+  chai::ArrayManager* manager = chai::ArrayManager::getInstance();
+  manager->setExecutionSpace(chai::GPU);
+  passObjectToKernel<<<1, 1>>>(array);
+  cudaDeviceSynchronize();
+  array.move(chai::CPU);
+  cudaDeviceSynchronize();
+  ASSERT_EQ(array[0], -1);
+}
+
 CUDA_TEST(managed_ptr, cuda_class_with_raw_array)
 {
   const int expectedValue = rand();
