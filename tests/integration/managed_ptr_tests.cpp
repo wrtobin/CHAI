@@ -56,10 +56,34 @@
 // Standard library headers
 #include <cstdlib>
 
+class Base1 {
+   public:
+      CHAI_HOST_DEVICE Base1() {}
+      CHAI_HOST_DEVICE virtual ~Base1() {}
+
+      CHAI_HOST_DEVICE virtual bool isBase1() { return true; }
+};
+
+class Base2 {
+   public:
+      CHAI_HOST_DEVICE Base2() {}
+      CHAI_HOST_DEVICE virtual ~Base2() {}
+
+      CHAI_HOST_DEVICE virtual bool isBase2() { return true; }
+};
+
+class ClassWithMultipleInheritance : public Base1, public Base2 {
+   public:
+      CHAI_HOST_DEVICE ClassWithMultipleInheritance() : Base1(), Base2() {}
+      CHAI_HOST_DEVICE virtual ~ClassWithMultipleInheritance() {}
+};
+
 class RawArrayClass {
    public:
       CHAI_HOST_DEVICE RawArrayClass() : m_values(nullptr) {}
       CHAI_HOST_DEVICE RawArrayClass(int* values) : m_values(values) {}
+
+      CHAI_HOST_DEVICE ~RawArrayClass() {}
 
       CHAI_HOST_DEVICE int getValue(const int i) const { return m_values[i]; }
 
@@ -341,13 +365,34 @@ CUDA_TEST(managed_ptr, cuda_nested_managed_ptr)
   auto container = chai::make_managed<TestContainer>(derived);
 
   chai::ManagedArray<int> results(1, chai::GPU);
-  
+
   forall(cuda(), 0, 1, [=] __device__ (int i) {
     results[i] = container->getValue();
   });
 
   results.move(chai::CPU);
   ASSERT_EQ(results[0], expectedValue);
+}
+
+CUDA_TEST(managed_ptr, cuda_multiple_inheritance)
+{
+  auto derived = chai::make_managed<ClassWithMultipleInheritance>();
+
+  chai::managed_ptr<Base1> base1 = derived;
+  chai::managed_ptr<Base2> base2 = derived;
+
+  chai::ManagedArray<bool> results(2, chai::GPU);
+
+  forall(cuda(), 0, 1, [=] __device__ (int i) {
+    results[i] = base1->isBase1();
+    results[1] = base2->isBase2();
+  });
+
+  results.move(chai::CPU);
+  cudaDeviceSynchronize();
+
+  ASSERT_EQ(results[0], true);
+  ASSERT_EQ(results[1], true);
 }
 
 #endif
