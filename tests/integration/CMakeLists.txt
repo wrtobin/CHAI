@@ -4,12 +4,18 @@ set (managed_array_test_depends
 set (managed_ptr_test_depends
   chai umpire gtest)
 
+set (reproducer_depends
+  chai umpire gtest)
+
 if (ENABLE_CUDA)
   set (managed_array_test_depends
     ${managed_array_test_depends}
     cuda)
   set (managed_ptr_test_depends
     ${managed_ptr_test_depends}
+    cuda)
+  set (reproducer_depends
+    ${reproducer_depends}
     cuda)
 endif ()
 
@@ -40,3 +46,18 @@ target_include_directories(
 blt_add_test(
   NAME managed_ptr_test
   COMMAND managed_ptr_tests)
+
+# reproducer tests
+blt_add_executable(
+  NAME reproducer
+  SOURCES reproducer.cpp
+  DEPENDS_ON ${reproducer_depends})
+
+target_include_directories(
+  reproducer
+  PUBLIC ${PROJECT_BINARY_DIR}/include)
+
+blt_add_test(
+  NAME reproducer
+  COMMAND reproducer)
+
