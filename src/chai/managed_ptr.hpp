@@ -1,3 +1,46 @@
+// ---------------------------------------------------------------------
+// Copyright (c) 2016-2018, Lawrence Livermore National Security, LLC. All
+// rights reserved.
+//
+// Produced at the Lawrence Livermore National Laboratory.
+//
+// This file is part of CHAI.
+//
+// LLNL-CODE-705877
+//
+// For details, see https:://github.com/LLNL/CHAI
+// Please also see the NOTICE and LICENSE files.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//
+// - Redistributions of source code must retain the above copyright
+//   notice, this list of conditions and the following disclaimer.
+//
+// - Redistributions in binary form must reproduce the above copyright
+//   notice, this list of conditions and the following disclaimer in the
+//   documentation and/or other materials provided with the
+//   distribution.
+//
+// - Neither the name of the LLNS/LLNL nor the names of its contributors
+//   may be used to endorse or promote products derived from this
+//   software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+// INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+// BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+// OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+// AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+// LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
+// WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+// ---------------------------------------------------------------------
+
 #ifndef MANAGED_PTR_H_
 #define MANAGED_PTR_H_
 
@@ -12,7 +55,7 @@ namespace chai {
    namespace detail {
 #ifdef __CUDACC__
       template <typename T>
-      __global__ void destroy_on_device(T*& gpuPointer);
+      __global__ void destroy_on_device(T** gpuPointer);
 #endif
    }
 
@@ -139,10 +182,12 @@ namespace chai {
                switch (space) {
                   case CPU:
                      m_cpu_pointer = pointers.begin()[i++];
+                     printf("In constructor: %p\n", m_cpu_pointer);
                      break;
 #ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointers.begin()[i++];
+                     printf("In constructor: %p\n", m_gpu_pointer);
                      break;
 #endif
                   default:
@@ -535,8 +580,29 @@ namespace chai {
                                  break;
 #ifdef __CUDACC__
                               case GPU:
-                                 detail::destroy_on_device<<<1, 1>>>(pointer);
+                              {
+                                 T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+                                 cpuPointerHolder[0] = temp;
+
+                                 printf("Just before destroying: %p\n", cpuPointerHolder[0]);
+
+                                 T** gpuPointerHolder;
+                                 cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+                                 cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
+                                            sizeof(T*), cudaMemcpyHostToDevice);
+
+                                 cudaDeviceSynchronize();
+
+                                 detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
+
+                                 cudaDeviceSynchronize();
+
+                                 free(cpuPointerHolder);
+                                 cudaFree(gpuPointerHolder);
+
                                  break;
+                              }
 #endif
                               default:
                                  break;
@@ -555,8 +621,29 @@ namespace chai {
                               break;
 #ifdef __CUDACC__
                            case GPU:
-                              detail::destroy_on_device<<<1, 1>>>(pointer);
+                           {
+                              T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+                              cpuPointerHolder[0] = pointer;
+
+                              printf("Just before destroying: %p\n", cpuPointerHolder[0]);
+
+                              T** gpuPointerHolder;
+                              cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+                              cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
+                                         sizeof(T*), cudaMemcpyHostToDevice);
+
+                              cudaDeviceSynchronize();
+
+                              detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
+
+                              cudaDeviceSynchronize();
+
+                              free(cpuPointerHolder);
+                              cudaFree(gpuPointerHolder);
+
                               break;
+                           }
 #endif
                            default:
                               break;
@@ -585,9 +672,10 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      __global__ void make_on_device(T*& gpuPointer, Args... args)
+      __global__ void make_on_device(T** gpuPointer, Args... args)
       {
-         gpuPointer = new T(std::forward<Args>(args)...);
+         *gpuPointer = new T(std::forward<Args>(args)...);
+         printf("In make_on_device: %p\n", *gpuPointer);
       }
 
       ///
@@ -606,9 +694,9 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      __global__ void make_on_device_from_factory(T*& gpuPointer, F f, Args... args)
+      __global__ void make_on_device_from_factory(T** gpuPointer, F f, Args... args)
       {
-         gpuPointer = f(std::forward<Args>(args)...);
+         *gpuPointer = f(std::forward<Args>(args)...);
       }
 
       ///
@@ -619,10 +707,10 @@ namespace chai {
       /// @param[out] gpuPointer The device pointer to call delete on
       ///
       template <typename T>
-      __global__ void destroy_on_device(T*& gpuPointer)
+      __global__ void destroy_on_device(T** gpuPointer)
       {
-         if (gpuPointer) {
-            delete gpuPointer;
+         if (gpuPointer && *gpuPointer) {
+            delete *gpuPointer;
          }
       }
 
@@ -707,9 +795,23 @@ namespace chai {
       template <typename T,
                 typename... Args>
       CHAI_HOST T* make_on_device(Args&&... args) {
-         T* gpuPointer;
-         make_on_device<<<1, 1>>>(gpuPointer, args...);
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+
+         T** gpuPointerHolder;
+         cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+         make_on_device<<<1, 1>>>(gpuPointerHolder, args...);
          cudaDeviceSynchronize();
+         cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
+         cudaDeviceSynchronize();
+
+         T* gpuPointer = cpuPointerHolder[0];
+
+         printf("Host make_on_device: %p\n", gpuPointer);
+
+         free(cpuPointerHolder);
+         cudaFree(gpuPointerHolder);
+
          return gpuPointer;
       }
 
@@ -727,9 +829,21 @@ namespace chai {
                 typename F,
                 typename... Args>
       CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
-         T* gpuPointer;
-         make_on_device_from_factory<T><<<1, 1>>>(gpuPointer, f, args...);
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+
+         T** gpuPointerHolder;
+         cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+         make_on_device_from_factory<T><<<1, 1>>>(gpuPointerHolder, f, args...);
          cudaDeviceSynchronize();
+         cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
+         cudaDeviceSynchronize();
+
+         T* gpuPointer = cpuPointerHolder[0];
+
+         free(cpuPointerHolder);
+         cudaFree(gpuPointerHolder);
+
          return gpuPointer;
       }
 
