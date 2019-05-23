@@ -124,7 +124,7 @@ CHAI_HOST_DEVICE TestBase* OverloadedFactory(const int value) {
    return new TestDerived(value);
 }
 
-// Explicit instantiations necessary for now
+// Explicit instantiations necessary because of cuda restrictions
 namespace chai {
    namespace detail {
       template __global__ void destroy_on_device<Simple>(Simple** pointer);
@@ -132,7 +132,6 @@ namespace chai {
       template __global__ void destroy_on_device<TestDerived>(TestDerived** pointer);
    }
 }
-
 
 TEST(managed_ptr, default_constructor)
 {
@@ -465,15 +464,13 @@ CUDA_TEST(managed_ptr, cuda_default_constructor)
   EXPECT_FALSE(array2[8]);
 }
 
-#if 0
-
 CUDA_TEST(managed_ptr, cuda_nullptr_constructor)
 {
   chai::managed_ptr<TestDerived> derived = nullptr;
   chai::managed_ptr<TestDerived> otherDerived = nullptr;
 
   chai::ManagedArray<TestDerived*> array(1, chai::GPU);
-  chai::ManagedArray<bool> array2(7, chai::GPU);
+  chai::ManagedArray<bool> array2(9, chai::GPU);
   
   forall(cuda(), 0, 1, [=] __device__ (int i) {
     array[i] = derived.get();
@@ -502,8 +499,6 @@ CUDA_TEST(managed_ptr, cuda_nullptr_constructor)
   EXPECT_FALSE(array2[7]);
   EXPECT_FALSE(array2[8]);
 }
-
-#endif
 
 CUDA_TEST(managed_ptr, cuda_gpu_pointer_constructor)
 {
