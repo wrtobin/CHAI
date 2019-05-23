@@ -56,6 +56,35 @@
 // Standard library headers
 #include <cstdlib>
 
+class Simple {
+   public:
+      CHAI_HOST_DEVICE Simple() : m_value(-1) {}
+      CHAI_HOST_DEVICE Simple(int value) : m_value(value) {}
+      CHAI_HOST_DEVICE ~Simple() {}
+
+      CHAI_HOST_DEVICE Simple(Simple const & other) : m_value(other.m_value) {}
+
+      CHAI_HOST_DEVICE Simple& operator=(Simple const & other) {
+         m_value = other.m_value;
+         return *this;
+      }
+
+      CHAI_HOST_DEVICE Simple(Simple&& other) : m_value(other.m_value) {
+         other.m_value = -1;
+      }
+
+      CHAI_HOST_DEVICE Simple& operator=(Simple&& other) {
+         m_value = other.m_value;
+         other.m_value = -1;
+         return *this;
+      }
+
+      CHAI_HOST_DEVICE int getValue() { return m_value; }
+
+   private:
+      int m_value;
+};
+
 class TestBase {
    public:
       CHAI_HOST_DEVICE TestBase() {}
@@ -70,6 +99,7 @@ class TestDerived : public TestBase {
    public:
       CHAI_HOST_DEVICE TestDerived() : TestBase(), m_value(0) {}
       CHAI_HOST_DEVICE TestDerived(const int value) : TestBase(), m_value(value) {}
+
       CHAI_HOST_DEVICE virtual ~TestDerived() {}
 
       CHAI_HOST_DEVICE virtual int getValue() const { return m_value; }
@@ -93,6 +123,16 @@ CHAI_HOST_DEVICE TestBase* OverloadedFactory() {
 CHAI_HOST_DEVICE TestBase* OverloadedFactory(const int value) {
    return new TestDerived(value);
 }
+
+// Explicit instantiations necessary for now
+namespace chai {
+   namespace detail {
+      template __global__ void destroy_on_device<Simple>(Simple** pointer);
+      template __global__ void destroy_on_device<TestBase>(TestBase** pointer);
+      template __global__ void destroy_on_device<TestDerived>(TestDerived** pointer);
+   }
+}
+
 
 TEST(managed_ptr, default_constructor)
 {
@@ -499,6 +539,81 @@ CUDA_TEST(managed_ptr, cuda_gpu_pointer_constructor)
   EXPECT_FALSE(array3[2]);
   EXPECT_TRUE(array3[3]);
   EXPECT_TRUE(array3[4]);
+}
+
+CUDA_TEST(managed_ptr, cuda_new_and_delete_on_device)
+{
+  // Initialize host side memory to hold a pointer
+  Simple** cpuPointerHolder = (Simple**) malloc(sizeof(Simple*));
+  cpuPointerHolder[0] = nullptr;
+
+  // Initialize device side memory to hold a pointer
+  Simple** gpuPointerHolder = nullptr;
+  cudaMalloc(&gpuPointerHolder, sizeof(Simple*));
+
+  // Create on the device
+  chai::detail::make_on_device<<<1, 1>>>(gpuPointerHolder);
+
+  // Copy to the host side memory
+  cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(Simple*), cudaMemcpyDeviceToHost);
+
+  // Free device side memory
+  cudaFree(gpuPointerHolder);
+
+  // Save the pointer
+  ASSERT_NE(cpuPointerHolder[0], nullptr);
+  Simple* gpuPointer = cpuPointerHolder[0];
+
+  // Free host side memory
+  free(cpuPointerHolder);
+
+  printf("In test case: %p\n", gpuPointer);
+
+  chai::managed_ptr<Simple> test({chai::GPU}, {gpuPointer});
+
+#if 0
+  // Initialize more host side memory
+  Simple** cpuPointerHolder2 = (Simple**) malloc(sizeof(Simple*));
+  cpuPointerHolder2[0] = gpuPointer;
+
+  // Initialize more device side memory
+  Simple** gpuPointerHolder2 = nullptr;
+  cudaMalloc(&gpuPointerHolder2, sizeof(Simple*));
+
+  // Copy pointer back to the device
+  cudaMemcpy(gpuPointerHolder2, cpuPointerHolder2, sizeof(Simple*),
+             cudaMemcpyHostToDevice);
+
+  chai::detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder2);
+
+  // Free host memory
+  free(cpuPointerHolder2);
+
+  // Free device memory
+  cudaFree(gpuPointerHolder2);
+#endif
+}
+
+CUDA_TEST(managed_ptr, simple_cuda_cpu_and_gpu_pointer_constructor)
+{
+  Simple* gpuPointer = chai::detail::make_on_device<Simple>(3);
+  Simple* cpuPointer = new Simple(4);
+
+  chai::managed_ptr<Simple> simple({chai::GPU, chai::CPU}, {gpuPointer, cpuPointer});
+
+  EXPECT_EQ(simple->getValue(), 4);
+
+  chai::ManagedArray<int> array1(1, chai::GPU);
+
+  forall(cuda(), 0, 1, [=] __device__ (int i) {
+    array1[i] = simple->getValue();
+  });
+
+  array1.move(chai::CPU);
+
+  cudaDeviceSynchronize();
+
+  EXPECT_EQ(array1[0], 3);
 }
 
 CUDA_TEST(managed_ptr, cuda_cpu_and_gpu_pointer_constructor)
