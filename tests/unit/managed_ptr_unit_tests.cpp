@@ -465,6 +465,8 @@ CUDA_TEST(managed_ptr, cuda_default_constructor)
   EXPECT_FALSE(array2[8]);
 }
 
+#if 0
+
 CUDA_TEST(managed_ptr, cuda_nullptr_constructor)
 {
   chai::managed_ptr<TestDerived> derived = nullptr;
@@ -500,6 +502,8 @@ CUDA_TEST(managed_ptr, cuda_nullptr_constructor)
   EXPECT_FALSE(array2[7]);
   EXPECT_FALSE(array2[8]);
 }
+
+#endif
 
 CUDA_TEST(managed_ptr, cuda_gpu_pointer_constructor)
 {
@@ -566,8 +570,6 @@ CUDA_TEST(managed_ptr, cuda_new_and_delete_on_device)
 
   // Free host side memory
   free(cpuPointerHolder);
-
-  printf("In test case: %p\n", gpuPointer);
 
   chai::managed_ptr<Simple> test({chai::GPU}, {gpuPointer});
 
