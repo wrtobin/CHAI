@@ -55,7 +55,7 @@ namespace chai {
    namespace detail {
 #ifdef __CUDACC__
       template <typename T>
-      __global__ void destroy_on_device(T** gpuPointer);
+      __global__ void destroy_on_device(T* gpuPointer);
 #endif
    }
 
@@ -580,19 +580,7 @@ namespace chai {
                               case GPU:
                               {
                                  if (pointer) {
-                                    T** cpuPointerHolder = (T**) malloc(sizeof(T*));
-                                    cpuPointerHolder[0] = temp;
-
-                                    T** gpuPointerHolder;
-                                    cudaMalloc(&gpuPointerHolder, sizeof(T*));
-
-                                    cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
-                                               sizeof(T*), cudaMemcpyHostToDevice);
-
-                                    detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
-
-                                    free(cpuPointerHolder);
-                                    cudaFree(gpuPointerHolder);
+                                    detail::destroy_on_device<<<1, 1>>>(temp);
                                  }
 
                                  break;
@@ -617,19 +605,7 @@ namespace chai {
                            case GPU:
                            {
                               if (pointer) {
-                                 T** cpuPointerHolder = (T**) malloc(sizeof(T*));
-                                 cpuPointerHolder[0] = pointer;
-
-                                 T** gpuPointerHolder;
-                                 cudaMalloc(&gpuPointerHolder, sizeof(T*));
-
-                                 cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
-                                            sizeof(T*), cudaMemcpyHostToDevice);
-
-                                 detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
-
-                                 free(cpuPointerHolder);
-                                 cudaFree(gpuPointerHolder);
+                                 detail::destroy_on_device<<<1, 1>>>(pointer);
                               }
 
                               break;
@@ -710,10 +686,10 @@ namespace chai {
       /// @param[out] gpuPointer The device pointer to call delete on
       ///
       template <typename T>
-      __global__ void destroy_on_device(T** gpuPointer)
+      __global__ void destroy_on_device(T* gpuPointer)
       {
-         if (gpuPointer && *gpuPointer) {
-            delete *gpuPointer;
+         if (gpuPointer) {
+            delete gpuPointer;
          }
       }
 

@@ -129,9 +129,9 @@ CHAI_HOST_DEVICE TestBase* OverloadedFactory(const int value) {
 // Explicit instantiations necessary because of cuda restrictions
 namespace chai {
    namespace detail {
-      template __global__ void destroy_on_device<Simple>(Simple** pointer);
-      template __global__ void destroy_on_device<TestBase>(TestBase** pointer);
-      template __global__ void destroy_on_device<TestDerived>(TestDerived** pointer);
+      template __global__ void destroy_on_device<Simple>(Simple* pointer);
+      template __global__ void destroy_on_device<TestBase>(TestBase* pointer);
+      template __global__ void destroy_on_device<TestDerived>(TestDerived* pointer);
    }
 }
 
