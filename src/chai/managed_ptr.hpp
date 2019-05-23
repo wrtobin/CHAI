@@ -649,6 +649,20 @@ namespace chai {
 
    namespace detail {
 #ifdef __CUDACC__
+      template <typename T,
+                typename... Args,
+                typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
+      CHAI_DEVICE void new_on_device(T** gpuPointer, Args... args) {
+         *gpuPointer = new T(args...);
+      }
+
+      template <typename T,
+                typename... Args,
+                typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
+      CHAI_DEVICE void new_on_device(T** gpuPointer, Args... args) {
+         *gpuPointer = new T(getRawPointers(args)...);
+      }
+
       ///
       /// @author Alan Dayton
       ///
@@ -664,7 +678,7 @@ namespace chai {
                 typename... Args>
       __global__ void make_on_device(T** gpuPointer, Args... args)
       {
-         *gpuPointer = new T(std::forward<Args>(args)...);
+         new_on_device(gpuPointer, args...);
       }
 
       ///
@@ -1144,10 +1158,9 @@ namespace chai {
       ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
 
 #ifdef __CUDACC__
-      // TODO: getRawPointers should be called on the device or with an execution space
       // Construct on the GPU first to take advantage of asynchrony
       arrayManager->setExecutionSpace(GPU);
-      T* gpuPointer = detail::make_on_device<T>(getRawPointers(args)...);
+      T* gpuPointer = detail::make_on_device<T>(args...);
 #endif
 
       // Construct on the CPU
