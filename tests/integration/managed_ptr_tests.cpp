@@ -186,6 +186,8 @@ class MultipleRawArrayClass {
       int* m_values2;
 };
 
+#ifdef __CUDACC__
+
 // Explicit instantiations necessary because of cuda restrictions
 namespace chai {
    namespace detail {
@@ -202,6 +204,8 @@ namespace chai {
       template __global__ void destroy_on_device<MultipleRawArrayClass>(MultipleRawArrayClass** pointer);
    }
 }
+
+#endif
 
 TEST(managed_ptr, class_with_raw_array)
 {

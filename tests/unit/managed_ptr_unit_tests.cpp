@@ -124,6 +124,8 @@ CHAI_HOST_DEVICE TestBase* OverloadedFactory(const int value) {
    return new TestDerived(value);
 }
 
+#ifdef __CUDACC__
+
 // Explicit instantiations necessary because of cuda restrictions
 namespace chai {
    namespace detail {
@@ -132,6 +134,8 @@ namespace chai {
       template __global__ void destroy_on_device<TestDerived>(TestDerived** pointer);
    }
 }
+
+#endif
 
 TEST(managed_ptr, default_constructor)
 {
