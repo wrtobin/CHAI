@@ -426,6 +426,78 @@ TEST(managed_ptr, conversion_copy_assignment_operator_from_host_ptr_constructed)
   EXPECT_NE(nullptr, thirdDerived);
 }
 
+TEST(managed_ptr, static_pointer_cast)
+{
+  TestDerived* cpuPointer = new TestDerived(3);
+  chai::managed_ptr<TestDerived> derived({chai::CPU}, {cpuPointer});
+
+  auto base = chai::static_pointer_cast<TestBase>(derived);
+
+  EXPECT_EQ(base->getValue(), 3);
+
+  EXPECT_NE(base.get(), nullptr);
+  EXPECT_EQ(base.use_count(), 2);
+  EXPECT_TRUE(base);
+  EXPECT_FALSE(base == nullptr);
+  EXPECT_FALSE(nullptr == base);
+  EXPECT_TRUE(base != nullptr);
+  EXPECT_TRUE(nullptr != base);
+}
+
+TEST(managed_ptr, dynamic_pointer_cast)
+{
+  TestDerived* cpuPointer = new TestDerived(3);
+  chai::managed_ptr<TestBase> base({chai::CPU}, {cpuPointer});
+
+  auto derived = chai::dynamic_pointer_cast<TestDerived>(base);
+
+  EXPECT_EQ(derived->getValue(), 3);
+
+  EXPECT_NE(derived.get(), nullptr);
+  EXPECT_EQ(derived.use_count(), 2);
+  EXPECT_TRUE(derived);
+  EXPECT_FALSE(derived == nullptr);
+  EXPECT_FALSE(nullptr == derived);
+  EXPECT_TRUE(derived != nullptr);
+  EXPECT_TRUE(nullptr != derived);
+}
+
+TEST(managed_ptr, const_pointer_cast)
+{
+  TestDerived* cpuPointer = new TestDerived(3);
+  chai::managed_ptr<const TestBase> base({chai::CPU}, {cpuPointer});
+
+  auto nonConstBase = chai::const_pointer_cast<TestBase>(base);
+
+  EXPECT_EQ(nonConstBase->getValue(), 3);
+
+  EXPECT_NE(nonConstBase.get(), nullptr);
+  EXPECT_EQ(nonConstBase.use_count(), 2);
+  EXPECT_TRUE(nonConstBase);
+  EXPECT_FALSE(nonConstBase == nullptr);
+  EXPECT_FALSE(nullptr == nonConstBase);
+  EXPECT_TRUE(nonConstBase != nullptr);
+  EXPECT_TRUE(nullptr != nonConstBase);
+}
+
+TEST(managed_ptr, reinterpret_pointer_cast)
+{
+  TestDerived* cpuPointer = new TestDerived(3);
+  chai::managed_ptr<TestBase> base({chai::CPU}, {cpuPointer});
+
+  auto derived = chai::reinterpret_pointer_cast<TestDerived>(base);
+
+  EXPECT_EQ(derived->getValue(), 3);
+
+  EXPECT_NE(derived.get(), nullptr);
+  EXPECT_EQ(derived.use_count(), 2);
+  EXPECT_TRUE(derived);
+  EXPECT_FALSE(derived == nullptr);
+  EXPECT_FALSE(nullptr == derived);
+  EXPECT_TRUE(derived != nullptr);
+  EXPECT_TRUE(nullptr != derived);
+}
+
 #ifdef __CUDACC__
 
 CUDA_TEST(managed_ptr, cuda_default_constructor)
