@@ -712,10 +712,10 @@ namespace chai {
       /// @param[in]  other The managed_ptr from which to extract the device pointer
       ///
       template <typename T>
-      __global__ void get_on_device(T*& gpuPointer,
-                                    const managed_ptr<T>& other)
+      __global__ void get_on_device(T** gpuPointer,
+                                    const managed_ptr<T> other)
       {
-         gpuPointer = other.get();
+         *gpuPointer = other.get();
       }
 
       ///
@@ -837,8 +837,18 @@ namespace chai {
       ///
       template <typename T>
       T* get_on_device(const managed_ptr<T>& other) {
-         T* gpuPointer;
-         get_on_device<<<1, 1>>>(gpuPointer, other);
+         T** gpuPointerHolder;
+         cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+         get_on_device<<<1, 1>>>(gpuPointerHolder, other);
+
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+         cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
+         T* gpuPointer = cpuPointerHolder[0];
+
+         free(cpuPointerHolder);
+         cudaFree(gpuPointerHolder);
+
          return gpuPointer;
       }
 
