@@ -186,26 +186,6 @@ class MultipleRawArrayClass {
       int* m_values2;
 };
 
-#ifdef __CUDACC__
-
-// Explicit instantiations necessary because of cuda restrictions
-namespace chai {
-   namespace detail {
-      template __global__ void destroy_on_device<Base1>(Base1* pointer);
-      template __global__ void destroy_on_device<Base2>(Base2* pointer);
-      template __global__ void destroy_on_device<ClassWithMultipleInheritance>(ClassWithMultipleInheritance* pointer);
-      template __global__ void destroy_on_device<RawArrayClass>(RawArrayClass* pointer);
-      template __global__ void destroy_on_device<RawPointerClass>(RawPointerClass* pointer);
-      template __global__ void destroy_on_device<TestBase>(TestBase* pointer);
-      template __global__ void destroy_on_device<TestDerived>(TestDerived* pointer);
-      template __global__ void destroy_on_device<TestInnerBase>(TestInnerBase* pointer);
-      template __global__ void destroy_on_device<TestInner>(TestInner* pointer);
-      template __global__ void destroy_on_device<TestContainer>(TestContainer* pointer);
-      template __global__ void destroy_on_device<MultipleRawArrayClass>(MultipleRawArrayClass* pointer);
-   }
-}
-
-#endif
 
 TEST(managed_ptr, class_with_raw_array)
 {

@@ -335,6 +335,19 @@ namespace chai {
          ///    clean up.
          ///
          CHAI_HOST_DEVICE ~managed_ptr() {
+            // This trick came from Max Katz at Nvidia.
+            // Taking the address of this kernel ensures that it gets instantiated
+            // by the compiler and can be used within __CUDA_ARCH__. Without this,
+            // calling destroy_on_device within the confines of __CUDA_ARCH__ will
+            // always fail with error code 0x8 (invalid device function).
+            // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#restrictions
+            // From the CUDA Programming Guide Restrictions:
+            // "If a __global__ function template is instantiated and launched from
+            // the host, then the function template must be instantiated with the
+            // same template arguments irrespective of whether __CUDA_ARCH__ is
+            // defined and regardless of the value of __CUDA_ARCH__."
+            (void) &detail::destroy_on_device<T>;
+
 #ifndef __CUDA_ARCH__
             removeReference();
 #endif
