@@ -335,6 +335,7 @@ namespace chai {
          ///    clean up.
          ///
          CHAI_HOST_DEVICE ~managed_ptr() {
+#ifdef __CUDACC__
             // This trick came from Max Katz at Nvidia.
             // Taking the address of this kernel ensures that it gets instantiated
             // by the compiler and can be used within __CUDA_ARCH__. Without this,
@@ -347,6 +348,7 @@ namespace chai {
             // same template arguments irrespective of whether __CUDA_ARCH__ is
             // defined and regardless of the value of __CUDA_ARCH__."
             (void) &detail::destroy_on_device<T>;
+#endif
 
 #ifndef __CUDA_ARCH__
             removeReference();
