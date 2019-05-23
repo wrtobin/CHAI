@@ -182,12 +182,10 @@ namespace chai {
                switch (space) {
                   case CPU:
                      m_cpu_pointer = pointers.begin()[i++];
-                     printf("In constructor: %p\n", m_cpu_pointer);
                      break;
 #ifdef __CUDACC__
                   case GPU:
                      m_gpu_pointer = pointers.begin()[i++];
-                     printf("In constructor: %p\n", m_gpu_pointer);
                      break;
 #endif
                   default:
@@ -581,25 +579,21 @@ namespace chai {
 #ifdef __CUDACC__
                               case GPU:
                               {
-                                 T** cpuPointerHolder = (T**) malloc(sizeof(T*));
-                                 cpuPointerHolder[0] = temp;
+                                 if (pointer) {
+                                    T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+                                    cpuPointerHolder[0] = temp;
 
-                                 printf("Just before destroying: %p\n", cpuPointerHolder[0]);
+                                    T** gpuPointerHolder;
+                                    cudaMalloc(&gpuPointerHolder, sizeof(T*));
 
-                                 T** gpuPointerHolder;
-                                 cudaMalloc(&gpuPointerHolder, sizeof(T*));
+                                    cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
+                                               sizeof(T*), cudaMemcpyHostToDevice);
 
-                                 cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
-                                            sizeof(T*), cudaMemcpyHostToDevice);
+                                    detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
 
-                                 cudaDeviceSynchronize();
-
-                                 detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
-
-                                 cudaDeviceSynchronize();
-
-                                 free(cpuPointerHolder);
-                                 cudaFree(gpuPointerHolder);
+                                    free(cpuPointerHolder);
+                                    cudaFree(gpuPointerHolder);
+                                 }
 
                                  break;
                               }
@@ -622,25 +616,21 @@ namespace chai {
 #ifdef __CUDACC__
                            case GPU:
                            {
-                              T** cpuPointerHolder = (T**) malloc(sizeof(T*));
-                              cpuPointerHolder[0] = pointer;
+                              if (pointer) {
+                                 T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+                                 cpuPointerHolder[0] = pointer;
 
-                              printf("Just before destroying: %p\n", cpuPointerHolder[0]);
+                                 T** gpuPointerHolder;
+                                 cudaMalloc(&gpuPointerHolder, sizeof(T*));
 
-                              T** gpuPointerHolder;
-                              cudaMalloc(&gpuPointerHolder, sizeof(T*));
+                                 cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
+                                            sizeof(T*), cudaMemcpyHostToDevice);
 
-                              cudaMemcpy(gpuPointerHolder, cpuPointerHolder,
-                                         sizeof(T*), cudaMemcpyHostToDevice);
+                                 detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
 
-                              cudaDeviceSynchronize();
-
-                              detail::destroy_on_device<<<1, 1>>>(gpuPointerHolder);
-
-                              cudaDeviceSynchronize();
-
-                              free(cpuPointerHolder);
-                              cudaFree(gpuPointerHolder);
+                                 free(cpuPointerHolder);
+                                 cudaFree(gpuPointerHolder);
+                              }
 
                               break;
                            }
@@ -675,7 +665,6 @@ namespace chai {
       __global__ void make_on_device(T** gpuPointer, Args... args)
       {
          *gpuPointer = new T(std::forward<Args>(args)...);
-         printf("In make_on_device: %p\n", *gpuPointer);
       }
 
       ///
@@ -741,10 +730,10 @@ namespace chai {
       ///                      convert using static_cast
       ///
       template <typename T, typename U>
-      __global__ void static_cast_on_device(T*& gpuPointer,
-                                            const managed_ptr<U>& other)
+      __global__ void static_cast_on_device(T** gpuPointer,
+                                            const managed_ptr<U> other)
       {
-         gpuPointer = static_cast<T*>(other.get());
+         *gpuPointer = static_cast<T*>(other.get());
       }
 
       ///
@@ -759,10 +748,10 @@ namespace chai {
       ///                      convert using const_cast
       ///
       template <typename T, typename U>
-      __global__ void const_cast_on_device(T*& gpuPointer,
-                                           const managed_ptr<U>& other)
+      __global__ void const_cast_on_device(T** gpuPointer,
+                                           const managed_ptr<U> other)
       {
-         gpuPointer = const_cast<T*>(other.get());
+         *gpuPointer = const_cast<T*>(other.get());
       }
 
       ///
@@ -777,10 +766,10 @@ namespace chai {
       ///                      convert using reinterpret_cast
       ///
       template <typename T, typename U>
-      __global__ void reinterpret_cast_on_device(T*& gpuPointer,
-                                                 const managed_ptr<U>& other)
+      __global__ void reinterpret_cast_on_device(T** gpuPointer,
+                                                 const managed_ptr<U> other)
       {
-         gpuPointer = reinterpret_cast<T*>(other.get());
+         *gpuPointer = reinterpret_cast<T*>(other.get());
       }
 
       ///
@@ -801,13 +790,8 @@ namespace chai {
          cudaMalloc(&gpuPointerHolder, sizeof(T*));
 
          make_on_device<<<1, 1>>>(gpuPointerHolder, args...);
-         cudaDeviceSynchronize();
          cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
-         cudaDeviceSynchronize();
-
          T* gpuPointer = cpuPointerHolder[0];
-
-         printf("Host make_on_device: %p\n", gpuPointer);
 
          free(cpuPointerHolder);
          cudaFree(gpuPointerHolder);
@@ -835,10 +819,7 @@ namespace chai {
          cudaMalloc(&gpuPointerHolder, sizeof(T*));
 
          make_on_device_from_factory<T><<<1, 1>>>(gpuPointerHolder, f, args...);
-         cudaDeviceSynchronize();
          cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
-         cudaDeviceSynchronize();
-
          T* gpuPointer = cpuPointerHolder[0];
 
          free(cpuPointerHolder);
@@ -858,7 +839,6 @@ namespace chai {
       T* get_on_device(const managed_ptr<T>& other) {
          T* gpuPointer;
          get_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
          return gpuPointer;
       }
 
@@ -872,9 +852,20 @@ namespace chai {
       ///
       template <typename T, typename U>
       CHAI_HOST T* static_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* gpuPointer;
-         static_cast_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
+         T** gpuPointerHolder;
+         cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+         static_cast_on_device<<<1, 1>>>(gpuPointerHolder, other);
+
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+         cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*),
+                    cudaMemcpyDeviceToHost);
+
+         T* gpuPointer = cpuPointerHolder[0];
+
+         free(cpuPointerHolder);
+         cudaFree(gpuPointerHolder);
+
          return gpuPointer;
       }
 
@@ -887,9 +878,20 @@ namespace chai {
       ///
       template <typename T, typename U>
       CHAI_HOST T* const_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* gpuPointer;
-         const_cast_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
+         T** gpuPointerHolder;
+         cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+         const_cast_on_device<<<1, 1>>>(gpuPointerHolder, other);
+
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+         cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*),
+                    cudaMemcpyDeviceToHost);
+
+         T* gpuPointer = cpuPointerHolder[0];
+
+         free(cpuPointerHolder);
+         cudaFree(gpuPointerHolder);
+
          return gpuPointer;
       }
 
@@ -903,9 +905,20 @@ namespace chai {
       ///
       template <typename T, typename U>
       CHAI_HOST T* reinterpret_cast_on_device(const managed_ptr<U>& other) noexcept {
-         T* gpuPointer;
-         reinterpret_cast_on_device<<<1, 1>>>(gpuPointer, other);
-         cudaDeviceSynchronize();
+         T** gpuPointerHolder;
+         cudaMalloc(&gpuPointerHolder, sizeof(T*));
+
+         reinterpret_cast_on_device<<<1, 1>>>(gpuPointerHolder, other);
+
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+         cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*),
+                    cudaMemcpyDeviceToHost);
+
+         T* gpuPointer = cpuPointerHolder[0];
+
+         free(cpuPointerHolder);
+         cudaFree(gpuPointerHolder);
+
          return gpuPointer;
       }
 #endif
