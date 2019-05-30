@@ -642,14 +642,14 @@ namespace chai {
       template <typename T,
                 typename... Args,
                 typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
-      CHAI_DEVICE void new_on_device(T** gpuPointer, Args... args) {
+      CHAI_DEVICE void new_on_device(T** gpuPointer, Args&&... args) {
          *gpuPointer = new T(args...);
       }
 
       template <typename T,
                 typename... Args,
                 typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
-      CHAI_DEVICE void new_on_device(T** gpuPointer, Args... args) {
+      CHAI_DEVICE void new_on_device(T** gpuPointer, Args&&... args) {
          *gpuPointer = new T(getRawPointers(args)...);
       }
 
@@ -666,7 +666,7 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      __global__ void make_on_device(T** gpuPointer, Args... args)
+      __global__ void make_on_device(T** gpuPointer, Args&&... args)
       {
          new_on_device(gpuPointer, args...);
       }
@@ -687,7 +687,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      __global__ void make_on_device_from_factory(T** gpuPointer, F f, Args... args)
+      __global__ void make_on_device_from_factory(T** gpuPointer, F f, Args&&... args)
       {
          *gpuPointer = f(args...);
       }
@@ -787,7 +787,7 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      CHAI_HOST T* make_on_device(Args... args) {
+      CHAI_HOST T* make_on_device(Args&&... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -834,7 +834,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      CHAI_HOST T* make_on_device_from_factory(F f, Args... args) {
+      CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -986,7 +986,7 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      CHAI_HOST T* make_on_host(Args... args) {
+      CHAI_HOST T* make_on_host(Args&&... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -1020,7 +1020,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      CHAI_HOST T* make_on_host_from_factory(F f, Args... args) {
+      CHAI_HOST T* make_on_host_from_factory(F f, Args&&... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -1110,7 +1110,7 @@ namespace chai {
       struct IsManaged<managed_ptr<T>> : std::true_type {};
 
       template <typename T, typename... Args>
-      filter_t<IsManaged, T, Args...> getManagedArguments(T arg, Args... args) {
+      filter_t<IsManaged, T, Args...> getManagedArguments(T arg, Args&&... args) {
          return std::tuple_cat(getManagedArguments(arg), getManagedArguments(args...));
       }
 
@@ -1136,7 +1136,7 @@ namespace chai {
       }
 
       template <typename T, typename... Args>
-      void freeManagedArrays(T head, Args... tail) {
+      void freeManagedArrays(T head, Args&&... tail) {
          freeManagedArrays(head);
          freeManagedArrays(tail...);
       }
@@ -1186,7 +1186,7 @@ namespace chai {
    template <typename T,
              typename... Args,
              typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
+   CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
       static_assert(std::is_constructible<T, Args...>::value,
                     "T is not constructible with the given arguments.");
 
@@ -1232,7 +1232,7 @@ namespace chai {
    template <typename T,
              typename... Args,
              typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
+   CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
       static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
                     "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
 
@@ -1264,7 +1264,7 @@ namespace chai {
    template <typename T,
              typename F,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args... args) {
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args&&... args) {
       static_assert(detail::is_invocable<F, Args...>::value,
                     "F is not invocable with the given arguments.");
 
