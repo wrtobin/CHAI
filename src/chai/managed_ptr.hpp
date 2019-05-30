@@ -66,7 +66,7 @@ namespace chai {
       {
       }
 
-      managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*&)> callback) :
+      managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*)> callback) :
          m_num_references(1),
          m_callback(callback)
       {
@@ -88,13 +88,13 @@ namespace chai {
          return m_last_space;
       }
 
-      void set_callback(std::function<bool(Action, ExecutionSpace, void*&)> callback) {
+      void set_callback(std::function<bool(Action, ExecutionSpace, void*)> callback) {
          m_callback = callback;
       }
 
       size_t m_num_references = 1; /// The reference counter
       ExecutionSpace m_last_space = NONE; /// The last space executed in
-      std::function<bool(Action, ExecutionSpace, void*&)> m_callback; /// Callback to handle events
+      std::function<bool(Action, ExecutionSpace, void*)> m_callback; /// Callback to handle events
    };
 
    ///
@@ -207,7 +207,7 @@ namespace chai {
          template <typename U>
          CHAI_HOST managed_ptr(std::initializer_list<ExecutionSpace> spaces,
                                std::initializer_list<U*> pointers,
-                               std::function<bool(Action, ExecutionSpace, void*&)> callback) :
+                               std::function<bool(Action, ExecutionSpace, void*)> callback) :
             m_cpu_pointer(nullptr),
             m_gpu_pointer(nullptr),
             m_pointer_record(new managed_ptr_record(callback))
@@ -503,7 +503,7 @@ namespace chai {
          ///
          /// @param[in] callback The callback to call when certain actions occur
          ///
-         CHAI_HOST void set_callback(std::function<bool(Action, ExecutionSpace, void*&)> callback) {
+         CHAI_HOST void set_callback(std::function<bool(Action, ExecutionSpace, void*)> callback) {
             if (m_pointer_record) {
                m_pointer_record->set_callback(callback);
             }
@@ -581,7 +581,6 @@ namespace chai {
                         // We can use const_cast because can managed_ptr can only
                         // be constructed with non const pointers.
                         T_non_const* temp = const_cast<T_non_const*>(pointer);
-
                         void* voidPointer = static_cast<void*>(temp);
 
                         if (!m_pointer_record->m_callback(ACTION_FREE,
@@ -788,19 +787,37 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      CHAI_HOST T* make_on_device(Args&&... args) {
-         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+      CHAI_HOST T* make_on_device(Args... args) {
+         // Get the ArrayManager and save the current execution space
+         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
 
+         // Set the execution space so that ManagedArrays and managed_ptrs
+         // are handled properly
+         arrayManager->setExecutionSpace(GPU);
+
+         // Allocate space on the GPU to hold the pointer to the new object
          T** gpuPointerHolder;
          cudaMalloc(&gpuPointerHolder, sizeof(T*));
 
+         // Create the object on the device
          make_on_device<<<1, 1>>>(gpuPointerHolder, args...);
+
+         // Allocate space on the CPU for the pointer and copy the pointer to the CPU
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
          cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
+
+         // Get the GPU pointer
          T* gpuPointer = cpuPointerHolder[0];
 
+         // Free the host and device buffers
          free(cpuPointerHolder);
          cudaFree(gpuPointerHolder);
 
+         // Set the execution space back to the previous value
+         arrayManager->setExecutionSpace(currentSpace);
+
+         // Return the GPU pointer
          return gpuPointer;
       }
 
@@ -818,18 +835,36 @@ namespace chai {
                 typename F,
                 typename... Args>
       CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
-         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
+         // Get the ArrayManager and save the current execution space
+         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
 
+         // Set the execution space so that chai::ManagedArrays and
+         // chai::managed_ptrs are handled properly
+         arrayManager->setExecutionSpace(GPU);
+
+         // Allocate space on the GPU to hold the pointer to the new object
          T** gpuPointerHolder;
          cudaMalloc(&gpuPointerHolder, sizeof(T*));
 
+         // Create the object on the device
          make_on_device_from_factory<T><<<1, 1>>>(gpuPointerHolder, f, args...);
+
+         // Allocate space on the CPU for the pointer and copy the pointer to the CPU
+         T** cpuPointerHolder = (T**) malloc(sizeof(T*));
          cudaMemcpy(cpuPointerHolder, gpuPointerHolder, sizeof(T*), cudaMemcpyDeviceToHost);
+
+         // Get the GPU pointer
          T* gpuPointer = cpuPointerHolder[0];
 
+         // Free the host and device buffers
          free(cpuPointerHolder);
          cudaFree(gpuPointerHolder);
 
+         // Set the execution space back to the previous value
+         arrayManager->setExecutionSpace(currentSpace);
+
+         // Return the GPU pointer
          return gpuPointer;
       }
 
@@ -937,6 +972,72 @@ namespace chai {
          return gpuPointer;
       }
 #endif
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new T on the host.
+      /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
+      ///    are handled properly.
+      ///
+      /// @param[in]  args The arguments to T's constructor
+      ///
+      /// @return The host pointer to the new T
+      ///
+      template <typename T,
+                typename... Args>
+      CHAI_HOST T* make_on_host(Args... args) {
+         // Get the ArrayManager and save the current execution space
+         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
+         // Set the execution space so that ManagedArrays and managed_ptrs
+         // are handled properly
+         arrayManager->setExecutionSpace(CPU);
+
+         // Create on the host
+         T* cpuPointer = new T(args...);
+
+         // Set the execution space back to the previous value
+         arrayManager->setExecutionSpace(currentSpace);
+
+         // Return the CPU pointer
+         return cpuPointer;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Calls a factory method to create a new object on the host.
+      /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
+      ///    are handled properly.
+      ///
+      /// @param[in]  f    The factory method
+      /// @param[in]  args The arguments to the factory method
+      ///
+      /// @return The host pointer to the new object
+      ///
+      template <typename T,
+                typename F,
+                typename... Args>
+      CHAI_HOST T* make_on_host_from_factory(F f, Args&&... args) {
+         // Get the ArrayManager and save the current execution space
+         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
+         // Set the execution space so that ManagedArrays and managed_ptrs
+         // are handled properly
+         arrayManager->setExecutionSpace(CPU);
+
+         // Create the object on the device
+         T* cpuPointer = f(args...);
+
+         // Set the execution space back to the previous value
+         arrayManager->setExecutionSpace(currentSpace);
+
+         // Return the GPU pointer
+         return cpuPointer;
+      }
 
       // Adapted from "The C++ Programming Language," Fourth Edition, by Bjarne Stroustrup
       template <typename T>
@@ -1089,22 +1190,13 @@ namespace chai {
       static_assert(std::is_constructible<T, Args...>::value,
                     "T is not constructible with the given arguments.");
 
-      // Get the ArrayManager and save the current execution space
-      chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
-      ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
-
 #ifdef __CUDACC__
       // Construct on the GPU first to take advantage of asynchrony
-      arrayManager->setExecutionSpace(GPU);
       T* gpuPointer = detail::make_on_device<T>(args...);
 #endif
 
       // Construct on the CPU
-      arrayManager->setExecutionSpace(CPU);
-      T* cpuPointer = new T(std::forward<Args>(args)...);
-
-      // Reset the execution space
-      arrayManager->setExecutionSpace(currentSpace);
+      T* cpuPointer = detail::make_on_host<T>(args...);
 
       // Construct and return the managed_ptr
 #ifdef __CUDACC__
@@ -1144,22 +1236,13 @@ namespace chai {
       static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
                     "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
 
-      // Get the ArrayManager and save the current execution space
-      chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
-      ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
-
 #ifdef __CUDACC__
       // Construct on the GPU first to take advantage of asynchrony
-      arrayManager->setExecutionSpace(GPU);
       T* gpuPointer = detail::make_on_device<T>(args...);
 #endif
 
       // Construct on the CPU
-      arrayManager->setExecutionSpace(CPU);
-      T* cpuPointer = new T(getRawPointers(std::forward<Args>(args))...);
-
-      // Reset the execution space
-      arrayManager->setExecutionSpace(currentSpace);
+      T* cpuPointer = detail::make_on_host<T>(getRawPointers(std::forward<Args>(args))...);
 
       // Construct and return the managed_ptr
 #ifdef __CUDACC__
@@ -1199,15 +1282,11 @@ namespace chai {
 
 #ifdef __CUDACC__
       // Construct on the GPU first to take advantage of asynchrony
-      arrayManager->setExecutionSpace(GPU);
       T* gpuPointer = detail::make_on_device_from_factory<R>(f, args...);
 #endif
 
       // Construct on the CPU
-      T* cpuPointer = f(std::forward<Args>(args)...);
-
-      // Reset the execution space
-      arrayManager->setExecutionSpace(currentSpace);
+      T* cpuPointer = detail::make_on_host_from_factory<R>(f, args...);
 
       // Construct and return the managed_ptr
 #ifdef __CUDACC__
