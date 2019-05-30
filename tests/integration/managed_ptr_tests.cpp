@@ -186,7 +186,6 @@ class MultipleRawArrayClass {
       int* m_values2;
 };
 
-
 TEST(managed_ptr, class_with_raw_array)
 {
   const int expectedValue = rand();
@@ -200,6 +199,8 @@ TEST(managed_ptr, class_with_raw_array)
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
 
   ASSERT_EQ(rawArrayClass->getValue(0), expectedValue);
+
+  array.free();
 }
 
 TEST(managed_ptr, class_with_multiple_raw_arrays)
@@ -406,6 +407,48 @@ CUDA_TEST(managed_ptr, cuda_class_with_raw_array)
 
   forall(cuda(), 0, 1, [=] __device__ (int i) {
     results[i] = rawArrayClass->getValue(i);
+  });
+
+  results.move(chai::CPU);
+  ASSERT_EQ(results[0], expectedValue);
+}
+
+CUDA_TEST(managed_ptr, cuda_class_with_raw_array_and_callback)
+{
+  const int expectedValue = rand();
+
+  chai::ManagedArray<int> array(1, chai::CPU);
+
+  forall(sequential(), 0, 1, [=] (int i) {
+     array[i] = expectedValue;
+  });
+
+  auto cpuPointer = new RawArrayClass(array);
+  auto gpuPointer = chai::detail::make_on_device<RawArrayClass>(array);
+
+  auto callback = [=] (chai::Action action, chai::ExecutionSpace space, void*) mutable -> bool {
+     switch (action) {
+        case chai::ACTION_FREE:
+           switch (space) {
+              case chai::NONE:
+                 array.free();
+                 return true;
+              default:
+                 return false;
+           }
+        default:
+           return false;
+     }
+  };
+
+  auto managedPointer = chai::managed_ptr<RawArrayClass>({chai::CPU, chai::GPU},
+                                                         {cpuPointer, gpuPointer},
+                                                         callback);
+
+  chai::ManagedArray<int> results(1, chai::GPU);
+
+  forall(cuda(), 0, 1, [=] __device__ (int i) {
+    results[i] = managedPointer->getValue(i);
   });
 
   results.move(chai::CPU);
