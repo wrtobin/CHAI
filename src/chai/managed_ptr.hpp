@@ -689,7 +689,7 @@ namespace chai {
                 typename... Args>
       __global__ void make_on_device_from_factory(T** gpuPointer, F f, Args... args)
       {
-         *gpuPointer = f(std::forward<Args>(args)...);
+         *gpuPointer = f(args...);
       }
 
       ///
@@ -834,7 +834,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      CHAI_HOST T* make_on_device_from_factory(F f, Args&&... args) {
+      CHAI_HOST T* make_on_device_from_factory(F f, Args... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -1020,7 +1020,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      CHAI_HOST T* make_on_host_from_factory(F f, Args&&... args) {
+      CHAI_HOST T* make_on_host_from_factory(F f, Args... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -1186,7 +1186,7 @@ namespace chai {
    template <typename T,
              typename... Args,
              typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
       static_assert(std::is_constructible<T, Args...>::value,
                     "T is not constructible with the given arguments.");
 
@@ -1232,7 +1232,7 @@ namespace chai {
    template <typename T,
              typename... Args,
              typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
       static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
                     "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
 
@@ -1242,7 +1242,7 @@ namespace chai {
 #endif
 
       // Construct on the CPU
-      T* cpuPointer = detail::make_on_host<T>(getRawPointers(std::forward<Args>(args))...);
+      T* cpuPointer = detail::make_on_host<T>(getRawPointers(args)...);
 
       // Construct and return the managed_ptr
 #ifdef __CUDACC__
@@ -1264,7 +1264,7 @@ namespace chai {
    template <typename T,
              typename F,
              typename... Args>
-   CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed_from_factory(F&& f, Args... args) {
       static_assert(detail::is_invocable<F, Args...>::value,
                     "F is not invocable with the given arguments.");
 
