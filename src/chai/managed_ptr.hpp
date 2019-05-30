@@ -787,7 +787,7 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      CHAI_HOST T* make_on_device(Args&&... args) {
+      CHAI_HOST T* make_on_device(Args... args) {
          // Get the ArrayManager and save the current execution space
          chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
          ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
@@ -1186,7 +1186,7 @@ namespace chai {
    template <typename T,
              typename... Args,
              typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
       static_assert(std::is_constructible<T, Args...>::value,
                     "T is not constructible with the given arguments.");
 
@@ -1232,7 +1232,7 @@ namespace chai {
    template <typename T,
              typename... Args,
              typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args&&... args) {
+   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
       static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
                     "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
 
