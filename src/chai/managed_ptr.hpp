@@ -666,7 +666,7 @@ namespace chai {
       ///
       template <typename T,
                 typename... Args>
-      __global__ void make_on_device(T** gpuPointer, Args&&... args)
+      __global__ void make_on_device(T** gpuPointer, Args... args)
       {
          new_on_device(gpuPointer, args...);
       }
@@ -687,7 +687,7 @@ namespace chai {
       template <typename T,
                 typename F,
                 typename... Args>
-      __global__ void make_on_device_from_factory(T** gpuPointer, F f, Args&&... args)
+      __global__ void make_on_device_from_factory(T** gpuPointer, F f, Args... args)
       {
          *gpuPointer = f(args...);
       }
