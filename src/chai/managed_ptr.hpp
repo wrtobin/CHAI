@@ -66,6 +66,14 @@ namespace chai {
       {
       }
 
+      template <typename... Args>
+      managed_ptr_record(std::tuple<Args...> managedPtrs) :
+         m_num_references(1),
+         m_callback(),
+         m_internalCallback([=] () { (void) managedPtrs; })
+      {
+      }
+
       managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*)> callback) :
          m_num_references(1),
          m_callback(callback)
@@ -95,6 +103,7 @@ namespace chai {
       size_t m_num_references = 1; /// The reference counter
       ExecutionSpace m_last_space = NONE; /// The last space executed in
       std::function<bool(Action, ExecutionSpace, void*)> m_callback; /// Callback to handle events
+      std::function<void()> m_internalCallback; /// Used to keep internal managed_ptrs alive
    };
 
    ///
@@ -520,6 +529,10 @@ namespace chai {
          template <typename U>
          friend class managed_ptr; /// Needed for the converting constructor
 
+         template <typename U,
+                   typename... Args>
+         friend CHAI_HOST managed_ptr<U> make_managed(Args... args);
+
          CHAI_HOST void move() const {
             if (m_pointer_record) {
                ExecutionSpace newSpace = ArrayManager::getInstance()->getExecutionSpace();
@@ -632,6 +645,49 @@ namespace chai {
                   }
 
                   delete m_pointer_record;
+               }
+            }
+         }
+
+         ///
+         /// @author Alan Dayton
+         ///
+         /// Constructs a managed_ptr from the given pointers. U* must be convertible
+         ///    to T*.
+         ///
+         /// @param[in] pointers The pointers to take ownership of
+         ///
+         template <typename U, typename... Args>
+         managed_ptr(std::initializer_list<ExecutionSpace> spaces,
+                     std::initializer_list<U*> pointers,
+                     std::tuple<Args...> managedPtrs) :
+            m_cpu_pointer(nullptr),
+            m_gpu_pointer(nullptr),
+            m_pointer_record(new managed_ptr_record(managedPtrs))
+         {
+            static_assert(std::is_convertible<U*, T*>::value,
+                          "U* must be convertible to T*.");
+
+            // TODO: In c++14 convert to a static_assert
+            if (spaces.size() != pointers.size()) {
+               printf("[CHAI] WARNING: The number of spaces is different than the number of pointers given!\n");
+            }
+
+            int i = 0;
+
+            for (const auto& space : spaces) {
+               switch (space) {
+                  case CPU:
+                     m_cpu_pointer = pointers.begin()[i++];
+                     break;
+#ifdef __CUDACC__
+                  case GPU:
+                     m_gpu_pointer = pointers.begin()[i++];
+                     break;
+#endif
+                  default:
+                     printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
+                     break;
                }
             }
          }
@@ -971,7 +1027,22 @@ namespace chai {
 
          return gpuPointer;
       }
+
 #endif
+
+      template <typename T,
+                typename... Args,
+                typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
+      CHAI_HOST T* new_on_host(Args&&... args) {
+         return new T(args...);
+      }
+
+      template <typename T,
+                typename... Args,
+                typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
+      CHAI_HOST T* new_on_host(Args&&... args) {
+         return new T(getRawPointers(args)...);
+      }
 
       ///
       /// @author Alan Dayton
@@ -996,7 +1067,7 @@ namespace chai {
          arrayManager->setExecutionSpace(CPU);
 
          // Create on the host
-         T* cpuPointer = new T(args...);
+         T* cpuPointer = detail::new_on_host<T>(args...);
 
          // Set the execution space back to the previous value
          arrayManager->setExecutionSpace(currentSpace);
@@ -1100,6 +1171,16 @@ namespace chai {
          return std::tuple<>();
       }
 
+      template <typename T>
+      std::tuple<managed_ptr<T>> getManagedPtrArguments(managed_ptr<T> arg) {
+         return std::forward_as_tuple(arg);
+      }
+
+      template <typename T>
+      std::tuple<> getManagedPtrArguments(T) {
+         return std::tuple<>();
+      }
+
       template <typename>
       struct IsManaged : std::false_type {};
 
@@ -1112,6 +1193,22 @@ namespace chai {
       template <typename T, typename... Args>
       filter_t<IsManaged, T, Args...> getManagedArguments(T arg, Args&&... args) {
          return std::tuple_cat(getManagedArguments(arg), getManagedArguments(args...));
+      }
+
+      template <typename>
+      struct IsManagedPtr : std::false_type {};
+
+      template <typename T>
+      struct IsManagedPtr<managed_ptr<T>> : std::true_type {};
+
+      template <typename T, typename... Args>
+      filter_t<IsManagedPtr, T, Args...> getManagedPtrArguments(T arg, Args&&... args) {
+         return std::tuple_cat(getManagedPtrArguments(arg),
+                               getManagedPtrArguments(args...));
+      }
+
+      std::tuple<> getManagedPtrArguments() {
+         return std::tuple<>();
       }
 
       // Taken from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
@@ -1184,12 +1281,8 @@ namespace chai {
    /// @param[in] args The arguments to T's constructor
    ///
    template <typename T,
-             typename... Args,
-             typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
+             typename... Args>
    CHAI_HOST managed_ptr<T> make_managed(Args... args) {
-      static_assert(std::is_constructible<T, Args...>::value,
-                    "T is not constructible with the given arguments.");
-
 #ifdef __CUDACC__
       // Construct on the GPU first to take advantage of asynchrony
       T* gpuPointer = detail::make_on_device<T>(args...);
@@ -1198,11 +1291,14 @@ namespace chai {
       // Construct on the CPU
       T* cpuPointer = detail::make_on_host<T>(args...);
 
+      // Save all managed_ptrs so they do not get deleted out from under us
+      auto managedPtrs = detail::getManagedPtrArguments(args...);
+
       // Construct and return the managed_ptr
 #ifdef __CUDACC__
-      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer});
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, managedPtrs);
 #else
-      return managed_ptr<T>({CPU}, {cpuPointer});
+      return managed_ptr<T>({CPU}, {cpuPointer}, managedPtrs);
 #endif
    }
 
@@ -1219,37 +1315,6 @@ namespace chai {
    template <typename T>
    CHAI_HOST_DEVICE T* getRawPointers(managed_ptr<T> arg) {
       return arg.get();
-   }
-
-   ///
-   /// @author Alan Dayton
-   ///
-   /// Makes a managed_ptr<T>.
-   /// Factory function to create managed_ptrs.
-   ///
-   /// @param[in] args The arguments to T's constructor
-   ///
-   template <typename T,
-             typename... Args,
-             typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
-   CHAI_HOST managed_ptr<T> make_managed(Args... args) {
-      static_assert(std::is_constructible<T, typename detail::managed_to_raw<Args>::type...>::value,
-                    "T is not constructible with the given arguments or with all managed arguments converted to raw pointers (if any).");
-
-#ifdef __CUDACC__
-      // Construct on the GPU first to take advantage of asynchrony
-      T* gpuPointer = detail::make_on_device<T>(args...);
-#endif
-
-      // Construct on the CPU
-      T* cpuPointer = detail::make_on_host<T>(getRawPointers(args)...);
-
-      // Construct and return the managed_ptr
-#ifdef __CUDACC__
-      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer});
-#else
-      return managed_ptr<T>({CPU}, {cpuPointer});
-#endif
    }
 
    ///
