@@ -250,6 +250,9 @@ TEST(managed_ptr, class_with_raw_ptr)
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
   auto rawPointerClass = chai::make_managed<RawPointerClass>(rawArrayClass);
 
+  // Test that the pointers this contained did not get cleaned up from under us
+  rawArrayClass = nullptr;
+
   ASSERT_EQ((*rawPointerClass).getValue(0), expectedValue);
 }
 
