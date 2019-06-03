@@ -66,14 +66,6 @@ namespace chai {
       {
       }
 
-      template <typename... Args>
-      managed_ptr_record(std::tuple<Args...> managedPtrs) :
-         m_num_references(1),
-         m_callback(),
-         m_internalCallback([=] () { (void) managedPtrs; })
-      {
-      }
-
       managed_ptr_record(std::function<bool(Action, ExecutionSpace, void*)> callback) :
          m_num_references(1),
          m_callback(callback)
@@ -103,7 +95,6 @@ namespace chai {
       size_t m_num_references = 1; /// The reference counter
       ExecutionSpace m_last_space = NONE; /// The last space executed in
       std::function<bool(Action, ExecutionSpace, void*)> m_callback; /// Callback to handle events
-      std::function<void()> m_internalCallback; /// Used to keep internal managed_ptrs alive
    };
 
    ///
@@ -649,51 +640,104 @@ namespace chai {
             }
          }
 
-         ///
-         /// @author Alan Dayton
-         ///
-         /// Constructs a managed_ptr from the given pointers. U* must be convertible
-         ///    to T*.
-         ///
-         /// @param[in] pointers The pointers to take ownership of
-         ///
-         template <typename U, typename... Args>
-         managed_ptr(std::initializer_list<ExecutionSpace> spaces,
-                     std::initializer_list<U*> pointers,
-                     std::tuple<Args...> managedPtrs) :
-            m_cpu_pointer(nullptr),
-            m_gpu_pointer(nullptr),
-            m_pointer_record(new managed_ptr_record(managedPtrs))
-         {
-            static_assert(std::is_convertible<U*, T*>::value,
-                          "U* must be convertible to T*.");
-
-            // TODO: In c++14 convert to a static_assert
-            if (spaces.size() != pointers.size()) {
-               printf("[CHAI] WARNING: The number of spaces is different than the number of pointers given!\n");
-            }
-
-            int i = 0;
-
-            for (const auto& space : spaces) {
-               switch (space) {
-                  case CPU:
-                     m_cpu_pointer = pointers.begin()[i++];
-                     break;
-#ifdef __CUDACC__
-                  case GPU:
-                     m_gpu_pointer = pointers.begin()[i++];
-                     break;
-#endif
-                  default:
-                     printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
-                     break;
-               }
-            }
-         }
    };
 
    namespace detail {
+      template <typename T>
+      CHAI_HOST_DEVICE T getRawPointers(T arg) {
+         return arg;
+      }
+
+      template <typename T>
+      CHAI_HOST_DEVICE T* getRawPointers(ManagedArray<T> arg) {
+         return (T*) arg;
+      }
+
+      template <typename T>
+      CHAI_HOST_DEVICE T* getRawPointers(managed_ptr<T> arg) {
+         return arg.get();
+      }
+
+      template <typename T,
+                typename... Args,
+                typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
+      CHAI_HOST T* new_on_host(Args&&... args) {
+         return new T(args...);
+      }
+
+      template <typename T,
+                typename... Args,
+                typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
+      CHAI_HOST T* new_on_host(Args&&... args) {
+         return new T(getRawPointers(args)...);
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new T on the host.
+      /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
+      ///    are handled properly.
+      ///
+      /// @param[in]  args The arguments to T's constructor
+      ///
+      /// @return The host pointer to the new T
+      ///
+      template <typename T,
+                typename... Args>
+      CHAI_HOST T* make_on_host(Args&&... args) {
+         // Get the ArrayManager and save the current execution space
+         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
+         // Set the execution space so that ManagedArrays and managed_ptrs
+         // are handled properly
+         arrayManager->setExecutionSpace(CPU);
+
+         // Create on the host
+         T* cpuPointer = detail::new_on_host<T>(args...);
+
+         // Set the execution space back to the previous value
+         arrayManager->setExecutionSpace(currentSpace);
+
+         // Return the CPU pointer
+         return cpuPointer;
+      }
+
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Calls a factory method to create a new object on the host.
+      /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
+      ///    are handled properly.
+      ///
+      /// @param[in]  f    The factory method
+      /// @param[in]  args The arguments to the factory method
+      ///
+      /// @return The host pointer to the new object
+      ///
+      template <typename T,
+                typename F,
+                typename... Args>
+      CHAI_HOST T* make_on_host_from_factory(F f, Args&&... args) {
+         // Get the ArrayManager and save the current execution space
+         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
+         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
+
+         // Set the execution space so that ManagedArrays and managed_ptrs
+         // are handled properly
+         arrayManager->setExecutionSpace(CPU);
+
+         // Create the object on the device
+         T* cpuPointer = f(args...);
+
+         // Set the execution space back to the previous value
+         arrayManager->setExecutionSpace(currentSpace);
+
+         // Return the GPU pointer
+         return cpuPointer;
+      }
+
 #ifdef __CUDACC__
       template <typename T,
                 typename... Args,
@@ -1030,224 +1074,6 @@ namespace chai {
 
 #endif
 
-      template <typename T,
-                typename... Args,
-                typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
-      CHAI_HOST T* new_on_host(Args&&... args) {
-         return new T(args...);
-      }
-
-      template <typename T,
-                typename... Args,
-                typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
-      CHAI_HOST T* new_on_host(Args&&... args) {
-         return new T(getRawPointers(args)...);
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Creates a new T on the host.
-      /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
-      ///    are handled properly.
-      ///
-      /// @param[in]  args The arguments to T's constructor
-      ///
-      /// @return The host pointer to the new T
-      ///
-      template <typename T,
-                typename... Args>
-      CHAI_HOST T* make_on_host(Args&&... args) {
-         // Get the ArrayManager and save the current execution space
-         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
-         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
-
-         // Set the execution space so that ManagedArrays and managed_ptrs
-         // are handled properly
-         arrayManager->setExecutionSpace(CPU);
-
-         // Create on the host
-         T* cpuPointer = detail::new_on_host<T>(args...);
-
-         // Set the execution space back to the previous value
-         arrayManager->setExecutionSpace(currentSpace);
-
-         // Return the CPU pointer
-         return cpuPointer;
-      }
-
-      ///
-      /// @author Alan Dayton
-      ///
-      /// Calls a factory method to create a new object on the host.
-      /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
-      ///    are handled properly.
-      ///
-      /// @param[in]  f    The factory method
-      /// @param[in]  args The arguments to the factory method
-      ///
-      /// @return The host pointer to the new object
-      ///
-      template <typename T,
-                typename F,
-                typename... Args>
-      CHAI_HOST T* make_on_host_from_factory(F f, Args&&... args) {
-         // Get the ArrayManager and save the current execution space
-         chai::ArrayManager* arrayManager = chai::ArrayManager::getInstance();
-         ExecutionSpace currentSpace = arrayManager->getExecutionSpace();
-
-         // Set the execution space so that ManagedArrays and managed_ptrs
-         // are handled properly
-         arrayManager->setExecutionSpace(CPU);
-
-         // Create the object on the device
-         T* cpuPointer = f(args...);
-
-         // Set the execution space back to the previous value
-         arrayManager->setExecutionSpace(currentSpace);
-
-         // Return the GPU pointer
-         return cpuPointer;
-      }
-
-      // Adapted from "The C++ Programming Language," Fourth Edition, by Bjarne Stroustrup
-      template <typename T>
-      struct managed_to_raw {
-         private:
-            template <typename U>
-            static U* check(managed_ptr<U> const &);
-
-            template <typename U>
-            static U* check(ManagedArray<U> const &);
-
-            template <typename U>
-            static T check(U const &);
-         public:
-            using type = decltype(check(std::declval<T>()));
-      };
-
-      // Taken from https://stackoverflow.com/questions/18366398/filter-the-types-of-a-parameter-pack
-      template <typename, typename>
-      struct typelist_concatenate;
-
-      template <typename T, typename... Args>
-      struct typelist_concatenate<T, std::tuple<Args...>> {
-         using type = std::tuple<T, Args...>;
-      };
-
-      template <typename T, typename... Args>
-      using typelist_concatenate_t = typename typelist_concatenate<T, Args...>::type;
-
-      template <template <typename> class, typename...>
-      struct filter;
-
-      template <template <typename> class Predicate>
-      struct filter<Predicate> {
-         using type = std::tuple<>;
-      };
-
-      template <template <typename> class Predicate, typename T, typename... Args>
-      struct filter<Predicate, T, Args...> {
-         using type = typename std::conditional<Predicate<T>::value,
-                                                typelist_concatenate_t<T, typename filter<Predicate, Args...>::type>,
-                                                typename filter<Predicate, Args...>::type>::type;
-      };
-
-      template <template <typename> class Predicate, typename... Args>
-      using filter_t = typename filter<Predicate, Args...>::type;
-
-      template <typename T>
-      std::tuple<managed_ptr<T>> getManagedArguments(managed_ptr<T> arg) {
-         return std::forward_as_tuple(arg);
-      }
-
-      template <typename T>
-      std::tuple<ManagedArray<T>> getManagedArguments(ManagedArray<T> arg) {
-         return std::forward_as_tuple(arg);
-      }
-
-      template <typename T>
-      std::tuple<> getManagedArguments(T) {
-         return std::tuple<>();
-      }
-
-      template <typename T>
-      std::tuple<managed_ptr<T>> getManagedPtrArguments(managed_ptr<T> arg) {
-         return std::forward_as_tuple(arg);
-      }
-
-      template <typename T>
-      std::tuple<> getManagedPtrArguments(T) {
-         return std::tuple<>();
-      }
-
-      template <typename>
-      struct IsManaged : std::false_type {};
-
-      template <typename T>
-      struct IsManaged<ManagedArray<T>> : std::true_type {};
-
-      template <typename T>
-      struct IsManaged<managed_ptr<T>> : std::true_type {};
-
-      template <typename T, typename... Args>
-      filter_t<IsManaged, T, Args...> getManagedArguments(T arg, Args&&... args) {
-         return std::tuple_cat(getManagedArguments(arg), getManagedArguments(args...));
-      }
-
-      template <typename>
-      struct IsManagedPtr : std::false_type {};
-
-      template <typename T>
-      struct IsManagedPtr<managed_ptr<T>> : std::true_type {};
-
-      template <typename T, typename... Args>
-      filter_t<IsManagedPtr, T, Args...> getManagedPtrArguments(T arg, Args&&... args) {
-         return std::tuple_cat(getManagedPtrArguments(arg),
-                               getManagedPtrArguments(args...));
-      }
-
-      std::tuple<> getManagedPtrArguments() {
-         return std::tuple<>();
-      }
-
-      // Taken from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
-      template <size_t ...I>
-      struct index_sequence {};
-
-      template <size_t N, size_t ...I>
-      struct make_index_sequence : public make_index_sequence<N - 1, N - 1, I...> {};
-
-      template <size_t ...I>
-      struct make_index_sequence<0, I...> : public index_sequence<I...> {};
-
-      // Adapted from https://stackoverflow.com/questions/1198260/how-can-you-iterate-over-the-elements-of-an-stdtuple
-      template <typename T>
-      void freeManagedArrays(T) {}
-
-      template <typename T>
-      void freeManagedArrays(ManagedArray<T> arg) {
-         if (arg) {
-            arg.free();
-         }
-      }
-
-      template <typename T, typename... Args>
-      void freeManagedArrays(T head, Args&&... tail) {
-         freeManagedArrays(head);
-         freeManagedArrays(tail...);
-      }
-
-      template<typename... Args, size_t... I>
-      void freeManagedArrays(std::tuple<Args...>& t, index_sequence<I...>) {
-         freeManagedArrays(std::get<I>(t)...);
-      }
-
-      template <typename... Args>
-      void freeManagedArrays(std::tuple<Args...>& t) {
-         freeManagedArrays(t, make_index_sequence<sizeof...(Args)>());
-      }
-
       // Adapted from "The C++ Programming Language," Fourth Edition,
       // by Bjarne Stroustrup, pp. 814-816
       struct substitution_failure {};
@@ -1291,30 +1117,12 @@ namespace chai {
       // Construct on the CPU
       T* cpuPointer = detail::make_on_host<T>(args...);
 
-      // Save all managed_ptrs so they do not get deleted out from under us
-      auto managedPtrs = detail::getManagedPtrArguments(args...);
-
       // Construct and return the managed_ptr
 #ifdef __CUDACC__
-      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer}, managedPtrs);
+      return managed_ptr<T>({CPU, GPU}, {cpuPointer, gpuPointer});
 #else
-      return managed_ptr<T>({CPU}, {cpuPointer}, managedPtrs);
+      return managed_ptr<T>({CPU}, {cpuPointer});
 #endif
-   }
-
-   template <typename T>
-   CHAI_HOST_DEVICE T getRawPointers(T arg) {
-      return arg;
-   }
-
-   template <typename T>
-   CHAI_HOST_DEVICE T* getRawPointers(ManagedArray<T> arg) {
-      return (T*) arg;
-   }
-
-   template <typename T>
-   CHAI_HOST_DEVICE T* getRawPointers(managed_ptr<T> arg) {
-      return arg.get();
    }
 
    ///

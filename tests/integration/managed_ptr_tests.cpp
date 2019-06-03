@@ -250,7 +250,12 @@ TEST(managed_ptr, class_with_raw_ptr)
   auto rawArrayClass = chai::make_managed<RawArrayClass>(array);
   auto rawPointerClass = chai::make_managed<RawPointerClass>(rawArrayClass);
 
-  // Test that the pointers this contained did not get cleaned up from under us
+  // This prevents the pointers contained by rawArrayClass from being deleted
+  // out from under us. Otherwise, rawArrayClass is the last remaining reference
+  // and if it is destroyed before rawPointerClass is, then we are in trouble.
+  rawPointerClass.set_callback([=] (chai::Action, chai::ExecutionSpace, void*) {
+                                  (void) rawArrayClass; return false;
+                               });
   rawArrayClass = nullptr;
 
   ASSERT_EQ((*rawPointerClass).getValue(0), expectedValue);
