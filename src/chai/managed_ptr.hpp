@@ -576,6 +576,7 @@ namespace chai {
 
                if (m_pointer_record->use_count() == 0) {
                   if (m_pointer_record->m_callback) {
+                     // Destroy device pointer first to take advantage of asynchrony
                      for (int space = NUM_EXECUTION_SPACES-1; space >= NONE; --space) {
                         ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
                         T* pointer = get(execSpace, false);
@@ -611,6 +612,7 @@ namespace chai {
                      }
                   }
                   else {
+                     // Destroy device pointer first to take advantage of asynchrony
                      for (int space = NUM_EXECUTION_SPACES-1; space >= NONE; --space) {
                         ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
                         T* pointer = get(execSpace, false);
