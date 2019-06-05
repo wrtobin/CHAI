@@ -57,11 +57,6 @@
 #include <functional>
 #include <tuple>
 
-#ifdef __CUDACC__
-// Cuda headers
-#include <cuda_runtime_api.h>
-#endif
-
 namespace chai {
    namespace detail {
 #ifdef __CUDACC__
