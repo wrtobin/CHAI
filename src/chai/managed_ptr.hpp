@@ -44,12 +44,23 @@
 #ifndef MANAGED_PTR_H_
 #define MANAGED_PTR_H_
 
+#include "chai/config.hpp"
+
+#include "chai/ArrayManager.hpp"
 #include "chai/ChaiMacros.hpp"
+#include "chai/ExecutionSpaces.hpp"
+#include "chai/ManagedArray.hpp"
+#include "chai/Types.hpp"
 
 // Standard libary headers
 #include <cstddef>
 #include <functional>
 #include <tuple>
+
+#ifdef __CUDACC__
+// Cuda headers
+#include <cuda_runtime_api.h>
+#endif
 
 namespace chai {
    namespace detail {
