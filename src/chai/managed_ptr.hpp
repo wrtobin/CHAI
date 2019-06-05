@@ -576,7 +576,7 @@ namespace chai {
 
                if (m_pointer_record->use_count() == 0) {
                   if (m_pointer_record->m_callback) {
-                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
+                     for (int space = NUM_EXECUTION_SPACES-1; space >= NONE; --space) {
                         ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
                         T* pointer = get(execSpace, false);
 
@@ -611,7 +611,7 @@ namespace chai {
                      }
                   }
                   else {
-                     for (int space = NONE; space < NUM_EXECUTION_SPACES; ++space) {
+                     for (int space = NUM_EXECUTION_SPACES-1; space >= NONE; --space) {
                         ExecutionSpace execSpace = static_cast<ExecutionSpace>(space);
                         T* pointer = get(execSpace, false);
 
