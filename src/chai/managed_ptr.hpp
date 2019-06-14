@@ -55,7 +55,6 @@
 // Standard libary headers
 #include <cstddef>
 #include <functional>
-#include <tuple>
 
 namespace chai {
    namespace detail {
@@ -106,37 +105,53 @@ namespace chai {
    ///
    /// @class managed_ptr<T>
    /// @author Alan Dayton
-   /// This wrapper calls new on both the GPU and CPU so that polymorphism can
-   ///    be used on the GPU. It is modeled after std::shared_ptr, so it does
-   ///    reference counting and automatically cleans up when the last reference
-   ///    is destroyed. If we ever do multi-threading on the CPU, locking will
+   ///
+   /// This wrapper stores both host and device pointers so that polymorphism can be
+   ///    used in both contexts with a single API. It is modeled after std::shared_ptr,
+   ///    so it does reference counting and automatically cleans up when the last
+   ///    reference is destroyed. If we ever do multi-threading on the CPU, locking will
    ///    need to be added to the reference counter.
-   /// Requirements:
-   ///    The underlying type created (U in the first constructor) must be convertible
-   ///       to T (e.g. T is a base class of U or there is a user defined conversion).
-   ///    This wrapper does NOT automatically sync the GPU copy if the CPU copy is
-   ///       updated and vice versa. The one exception to this is nested ManagedArrays
-   ///       and managed_ptrs, but only if they are registered via the registerArguments
-   ///       method. The factory methods make_managed and make_managed_from_factory
-   ///       will register arguments passed to them automatically. Otherwise, if you
-   ///       wish to keep the CPU and GPU instances in sync, you must explicitly modify
-   ///       the object in both the CPU context and the GPU context.
-   ///    Members of T that are raw pointers need to be initialized correctly with a
-   ///       host or device pointer. If it is desired that these be kept in sync,
-   ///       pass a ManagedArray to the make_managed or make_managed_from_factory
-   ///       functions in place of a raw array. Or, if this is after the managed_ptr
-   ///       has been constructed, use the same ManagedArray in both the CPU and GPU
-   ///       contexts to initialize the raw pointer member and then register the
-   ///       ManagedArray with the registerArguments method on the managed_ptr.
-   ///       If only a raw array is passed to make_managed, accessing that member
-   ///       will be valid only in the correct context. To prevent the accidental
-   ///       use of that member in the wrong context, any methods that access raw
-   ///       pointers not initialized in both contexts as previously described
-   ///       should be __host__ only or __device__ only. Special care should be
-   ///       taken when passing raw pointers as arguments to member functions.
-   ///    Methods that can be called on the CPU and GPU must be declared with the
-   ///       __host__ __device__ specifiers. This includes the constructors being
-   ///       used and destructors.
+   /// The make_managed and make_managed_from_factory functions call new on both the
+   ///    host and device so that polymorphism is valid in both contexts. Simply copying
+   ///    an object to the device will not copy the vtable, so new must be called on
+   ///    the device.
+   ///
+   /// Usage Requirements:
+   ///    Methods that can be called on both the host and device must be declared
+   ///       with the __host__ __device__ specifiers. This includes constructors
+   ///       and destructors. Furthermore, destructors of base and child classes
+   ///       must all be declared virtual.
+   ///    This wrapper does NOT automatically sync the device object if the host object
+   ///       is updated and vice versa. If you wish to keep both instances in sync,
+   ///       you must explicitly modify the object in both the host context and the
+   ///       device context.
+   ///    Raw array members of T need to be initialized correctly with a host or
+   ///       device pointer. If a ManagedArray is passed to the make_managed or
+   ///       make_managed_from_factory methods in place of a raw array, it will be
+   ///       cast to the appropriate host or device pointer when passed to T's
+   ///       constructor on the host and on the device. If it is desired that these
+   ///       host and device pointers be kept in sync, define a callback that maintains
+   ///       a copy of the ManagedArray and upon the ACTION_MOVE event calls the copy
+   ///       constructor of that ManagedArray.
+   ///    If a raw array is passed to make_managed, accessing that member will be
+   ///       valid only in the correct context. To prevent the accidental use of that
+   ///       member in the wrong context, any methods that access it should be __host__
+   ///       only or __device__ only. Special care should be taken when passing raw
+   ///       arrays as arguments to member functions.
+   ///    The same restrictions for raw array members also apply to raw pointer members.
+   ///       A managed_ptr can be passed to the make_managed or make_managed_from_factory
+   ///       methods in place of a raw pointer, and the host constructor of T will
+   ///       be given the extracted host pointer, and likewise the device constructor
+   ///       of T will be given the extracted device pointer. It is recommended that
+   ///       a callback is defined that maintains a copy of the managed_ptr so that
+   ///       the raw pointers are not accidentally destroyed prematurely (since
+   ///       managed_ptr does reference counting). It is also recommended that the
+   ///       callback calls the copy constructor of the managed_ptr on the ACTION_MOVE
+   ///       event so that the ACTION_MOVE event is triggered also for the inner
+   ///       managed_ptr.
+   ///    Again, if a raw pointer is passed to make_managed, accessing that member will
+   ///       only be valid in the correct context. Take care when passing raw pointers
+   ///       as arguments to member functions.
    ///
    template <typename T>
    class managed_ptr {
@@ -165,7 +180,8 @@ namespace chai {
          /// Constructs a managed_ptr from the given pointers. U* must be convertible
          ///    to T*.
          ///
-         /// @param[in] pointers The pointers to take ownership of
+         /// @param[in] spaces A list of execution spaces
+         /// @param[in] pointers A list of pointers to take ownership of
          ///
          template <typename U>
          managed_ptr(std::initializer_list<ExecutionSpace> spaces,
@@ -207,7 +223,8 @@ namespace chai {
          /// Constructs a managed_ptr from the given pointers and callback function.
          ///    U* must be convertible to T*.
          ///
-         /// @param[in] pointers The pointers to take ownership of
+         /// @param[in] spaces A list of execution spaces
+         /// @param[in] pointers A list of pointers to take ownership of
          /// @param[in] callback The user defined callback to call on trigger events
          ///
          template <typename U>
@@ -299,7 +316,8 @@ namespace chai {
          /// Has the same ownership information as other, but holds different pointers.
          ///
          /// @param[in] other The managed_ptr to copy ownership information from
-         /// @param[in] pointers The pointers to maintain a reference to
+         /// @param[in] spaces A list of execution spaces
+         /// @param[in] pointers A list of pointers to maintain a reference to
          ///
          template <typename U>
          CHAI_HOST managed_ptr(const managed_ptr<U>& other,
@@ -432,6 +450,14 @@ namespace chai {
 #endif
          }
 
+         ///
+         /// @author Alan Dayton
+         ///
+         /// Returns the pointer corresponding to the given execution space.
+         ///
+         /// @param[in] space The execution space
+         /// @param[in] move Whether or not to trigger the move event (default is true)
+         ///
          CHAI_HOST inline T* get(const ExecutionSpace space, const bool move=true) const {
             if (move) {
                this->move();
@@ -519,21 +545,29 @@ namespace chai {
          }
 
       private:
-         T* m_cpu_pointer = nullptr;
-         T* m_gpu_pointer = nullptr;
+         T* m_cpu_pointer = nullptr; /// The CPU pointer
+         T* m_gpu_pointer = nullptr; /// The GPU pointer
          managed_ptr_record* m_pointer_record = nullptr; /// The pointer record
 
+         /// Needed for the converting constructor
          template <typename U>
-         friend class managed_ptr; /// Needed for the converting constructor
+         friend class managed_ptr;
 
+         /// Needed to use the make_managed API
          template <typename U,
                    typename... Args>
          friend CHAI_HOST managed_ptr<U> make_managed(Args... args);
 
+         ///
+         /// @author Alan Dayton
+         ///
+         /// If the execution space has changed, calls the user provided callback
+         ///    with the ACTION_MOVE event.
+         ///
          CHAI_HOST void move() const {
             if (m_pointer_record) {
                ExecutionSpace newSpace = ArrayManager::getInstance()->getExecutionSpace();
-               
+
                if (newSpace != NONE && newSpace != m_pointer_record->getLastSpace()) {
                   m_pointer_record->m_last_space = newSpace;
 
@@ -651,21 +685,62 @@ namespace chai {
    };
 
    namespace detail {
+      ///
+      /// @author Alan Dayton
+      ///
+      /// This implementation of getRawPointers handles every non-CHAI type.
+      ///
+      /// @param[in] arg The non-CHAI type, which will simply be returned
+      ///
+      /// @return arg
+      ///
       template <typename T>
       CHAI_HOST_DEVICE T getRawPointers(T arg) {
          return arg;
       }
 
+      ///
+      /// @author Alan Dayton
+      ///
+      /// This implementation of getRawPointers handles the CHAI ManagedArray type.
+      ///
+      /// @param[in] arg The ManagedArray from which to extract a raw pointer
+      ///
+      /// @return arg cast to a raw pointer
+      ///
       template <typename T>
       CHAI_HOST_DEVICE T* getRawPointers(ManagedArray<T> arg) {
          return (T*) arg;
       }
 
+      ///
+      /// @author Alan Dayton
+      ///
+      /// This implementation of getRawPointers handles the CHAI managed_ptr type.
+      /// The managed_ptr type is not implicitly convertible to a raw pointer, so
+      ///    when using the make_managed API, it is necessary to pull the raw pointers
+      ///    out of the managed_ptr.
+      ///
+      /// @param[in] arg The managed_ptr from which to extract a raw pointer
+      ///
+      /// @return a raw pointer acquired from arg
+      ///
       template <typename T>
       CHAI_HOST_DEVICE T* getRawPointers(managed_ptr<T> arg) {
          return arg.get();
       }
 
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new object on the host and returns a pointer to it.
+      /// This implementation of new_on_host is called when no arguments need to be
+      ///    converted to raw pointers.
+      ///
+      /// @param[in] args The arguments to T's constructor
+      ///
+      /// @return a pointer to the new object on the host
+      ///
       template <typename T,
                 typename... Args,
                 typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
@@ -673,6 +748,17 @@ namespace chai {
          return new T(args...);
       }
 
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new object on the host and returns a pointer to it.
+      /// This implementation of new_on_host is called when arguments do need to be
+      ///    converted to raw pointers.
+      ///
+      /// @param[in] args The arguments to T's constructor
+      ///
+      /// @return a pointer to the new object on the host
+      ///
       template <typename T,
                 typename... Args,
                 typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
@@ -685,7 +771,7 @@ namespace chai {
       ///
       /// Creates a new T on the host.
       /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
-      ///    are handled properly.
+      ///    are moved to the host as necessary.
       ///
       /// @param[in]  args The arguments to T's constructor
       ///
@@ -717,7 +803,7 @@ namespace chai {
       ///
       /// Calls a factory method to create a new object on the host.
       /// Sets the execution space to the CPU so that ManagedArrays and managed_ptrs
-      ///    are handled properly.
+      ///    are moved to the host as necessary.
       ///
       /// @param[in]  f    The factory method
       /// @param[in]  args The arguments to the factory method
@@ -747,6 +833,17 @@ namespace chai {
       }
 
 #ifdef __CUDACC__
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new object on the device and returns a pointer to it.
+      /// This implementation of new_on_device is called when no arguments need to be
+      ///    converted to raw pointers.
+      ///
+      /// @param[in] args The arguments to T's constructor
+      ///
+      /// @return a pointer to the new object on the device
+      ///
       template <typename T,
                 typename... Args,
                 typename std::enable_if<std::is_constructible<T, Args...>::value, int>::type = 0>
@@ -754,6 +851,17 @@ namespace chai {
          *gpuPointer = new T(args...);
       }
 
+      ///
+      /// @author Alan Dayton
+      ///
+      /// Creates a new object on the device and returns a pointer to it.
+      /// This implementation of new_on_device is called when arguments do need to be
+      ///    converted to raw pointers.
+      ///
+      /// @param[in] args The arguments to T's constructor
+      ///
+      /// @return a pointer to the new object on the device
+      ///
       template <typename T,
                 typename... Args,
                 typename std::enable_if<!std::is_constructible<T, Args...>::value, int>::type = 0>
@@ -1084,6 +1192,7 @@ namespace chai {
 
       // Adapted from "The C++ Programming Language," Fourth Edition,
       // by Bjarne Stroustrup, pp. 814-816
+      // Used to determine if a functor is callable with the given arguments
       struct substitution_failure {};
 
       template <typename T>
@@ -1274,7 +1383,7 @@ namespace chai {
       return managed_ptr<T>(other, {CPU}, {cpuPointer});
 #endif
    }
-   
+
    /// Comparison operators
 
    ///
@@ -1359,12 +1468,20 @@ namespace chai {
       return nullptr != rhs.get();
    }
 
+   ///
+   /// @author Alan Dayton
+   ///
+   /// Not equals comparison.
+   ///
+   /// @param[in] lhs The first managed_ptr to swap
+   /// @param[in] rhs The second managed_ptr to swap
+   ///
    template <typename T>
    void swap(managed_ptr<T>& lhs, managed_ptr<T>& rhs) noexcept {
-      std::swap(lhs.m_active_pointer, rhs.m_active_pointer);
+      std::swap(lhs.m_cpu_pointer, rhs.m_cpu_pointer);
+      std::swap(lhs.m_gpu_pointer, rhs.m_gpu_pointer);
       std::swap(lhs.m_pointer_record, rhs.m_pointer_record);
    }
-
 } // namespace chai
 
 #endif // MANAGED_PTR
