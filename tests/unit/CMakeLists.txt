@@ -41,26 +41,11 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #######################################################################
 
+# ManagedArray dependencies
 set (managed_array_test_depends
   chai umpire gtest)
 
-set (array_manager_test_depends
-  chai umpire gtest)
-
-set (managed_ptr_test_depends
-  chai umpire gtest)
-
-if (ENABLE_CUDA)
-  set (managed_array_test_depends
-    ${managed_array_test_depends}
-    cuda)
-  set (array_manager_test_depends
-    ${array_manager_test_depends}
-    cuda)
-  set (managed_ptr_test_depends
-    ${managed_ptr_test_depends}
-    cuda)
-endif ()
+blt_list_append(TO managed_array_test_depends ELEMENTS cuda IF ${ENABLE_CUDA})
 
 # ManagedArray tests
 blt_add_executable(
@@ -76,6 +61,12 @@ blt_add_test(
   NAME managed_array_unit_test
   COMMAND managed_array_unit_tests)
 
+# ArrayManager dependencies
+set (array_manager_test_depends
+  chai umpire gtest)
+
+blt_list_append(TO array_manager_test_depends ELEMENTS cuda IF ${ENABLE_CUDA})
+
 # ArrayManager tests
 blt_add_executable(
   NAME array_manager_unit_tests
@@ -89,6 +80,12 @@ target_include_directories(
 blt_add_test(
   NAME array_manager_unit_test
   COMMAND array_manager_unit_tests)
+
+# managed_ptr dependencies
+set (managed_ptr_test_depends
+  chai umpire gtest)
+
+blt_list_append(TO managed_ptr_test_depends ELEMENTS cuda IF ${ENABLE_CUDA})
 
 # managed_ptr tests
 blt_add_executable(
