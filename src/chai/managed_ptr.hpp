@@ -180,6 +180,8 @@ namespace chai {
          /// Constructs a managed_ptr from the given pointers. U* must be convertible
          ///    to T*.
          ///
+         /// @pre spaces.size() == pointers.size()
+         ///
          /// @param[in] spaces A list of execution spaces
          /// @param[in] pointers A list of pointers to take ownership of
          ///
@@ -211,6 +213,7 @@ namespace chai {
                      break;
 #endif
                   default:
+                     ++i;
                      printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
                      break;
                }
@@ -222,6 +225,8 @@ namespace chai {
          ///
          /// Constructs a managed_ptr from the given pointers and callback function.
          ///    U* must be convertible to T*.
+         ///
+         /// @pre spaces.size() == pointers.size()
          ///
          /// @param[in] spaces A list of execution spaces
          /// @param[in] pointers A list of pointers to take ownership of
@@ -256,6 +261,7 @@ namespace chai {
                      break;
 #endif
                   default:
+                     ++i;
                      printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
                      break;
                }
@@ -315,6 +321,8 @@ namespace chai {
          /// Aliasing constructor.
          /// Has the same ownership information as other, but holds different pointers.
          ///
+         /// @pre spaces.size() == pointers.size()
+         ///
          /// @param[in] other The managed_ptr to copy ownership information from
          /// @param[in] spaces A list of execution spaces
          /// @param[in] pointers A list of pointers to maintain a reference to
@@ -343,6 +351,7 @@ namespace chai {
                      break;
 #endif
                   default:
+                     ++i;
                      printf("[CHAI] WARNING: Execution space not supported by chai::managed_ptr!\n");
                      break;
                }
